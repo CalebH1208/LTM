@@ -11,15 +11,13 @@ uint32_t length_10Hz;
 uint32_t * indices_1Hz;
 uint32_t length_1Hz;
 
-void data_logging_init(uint32_t * indices_100Hz_p, uint32_t length_100Hz_p, 
-                        uint32_t * indices_10Hz_p, uint32_t length_10Hz_p, 
-                        uint32_t * indices_1Hz_p, uint32_t length_1Hz_p){
-    indices_100Hz = indices_100Hz_p;
-    length_100Hz = length_100Hz_p;
-    indices_10Hz = indices_10Hz_p;
-    length_10Hz = length_10Hz_p;
-    indices_1Hz = indices_1Hz_p;
-    length_1Hz = length_1Hz_p;
+void data_logging_init(CAN_metadata_t CAN_data){
+    indices_100Hz = CAN_data.indices_100Hz_p;
+    length_100Hz = CAN_data.length_100Hz_p;
+    indices_10Hz = CAN_data.indices_10Hz_p;
+    length_10Hz = CAN_data.length_10Hz_p;
+    indices_1Hz = CAN_data.indices_1Hz_p;
+    length_1Hz = CAN_data.length_1Hz_p;
     ESP_LOGI(TAG,"Data logging init successful");
 }
 
@@ -31,31 +29,38 @@ void data_logging_ritual(){
     TickType_t curr_ticks;
 
     uint8_t count = 0;
+    car_state_t * state;
+
+    size_t str_len;
+    struct timeval up_time;
+    int64_t up_time_ms;
+
+    char * csv_string;
 
     while(1){
         curr_ticks = xTaskGetTickCount();
 
-        car_state_t * state = data_service_get_car_state();
+        state = data_service_get_car_state();
 
         if(state == NULL){
             RUN_THAT_SHIT_BACK;
         }
 
-        size_t str_len = 0;
-        struct timeval up_time;
+        str_len = 0;
+        
         gettimeofday(&up_time,NULL);
-        int64_t = up_time_ms = (int64_t)up_time.sec * 1000000L + (int64_t)up_time.usec;
+        up_time_ms = (int64_t)up_time.sec * 1000000L + (int64_t)up_time.usec;
 
-        char * csv_string = parse_data_string(indices_100Hz, length_100Hz, state, &str_len, up_time_ms);
+        csv_string = parse_data_string(indices_100Hz, length_100Hz, state, &str_len, up_time_ms);
         write_data(csv_string, str_len, fptr_100HZ);
 
         if(count % 10 == 0){
-            char * csv_string = parse_data_string(indices_10Hz, length_10Hz, state, &str_len, up_time_ms);
+            csv_string = parse_data_string(indices_10Hz, length_10Hz, state, &str_len, up_time_ms);
             write_data(csv_string, str_len, fptr_10HZ);
         }
 
         if(count % 100 == 0){
-            char * csv_string = parse_data_string(indices_1Hz, length_1Hz, state, &str_len, up_time_ms);
+            csv_string = parse_data_string(indices_1Hz, length_1Hz, state, &str_len, up_time_ms);
             write_data(csv_string, str_len, fptr_1HZ);
 
             fflush(fptr_100HZ);
@@ -65,8 +70,10 @@ void data_logging_ritual(){
             count = 0;
         }
 
-        free(state);
         count++;
+        
+        free(state);
+
         xTaskDelayUntil(&curr_ticks, pdMS_TO_TICKS(10));
     }
 }
@@ -86,29 +93,33 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
     if(bytes_written > 0){
         buffer_index += bytes_written;
     }else{
+        free(buffer);
         return NULL;
     }
 
     for(int i = 0; i < num_indices; i++){
         if(state->elements[i].type == 'f'){
-            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%.7f", state->elements[i].data.f);
+            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%.7f", state->elements[indices[i]].data.f);
             if(bytes_written > 0){
                 buffer_index += bytes_written;
             }else{
+                free(buffer);
                 return NULL;
             }
         }else if(state->elements[i].type == 'u'){
-            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%lu", state->elements[i].data.u);
+            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%lu", state->elements[indices[i]].data.u);
             if(bytes_written > 0){
                 buffer_index += bytes_written;
             }else{
+                free(buffer);
                 return NULL;
             }
         }else if(state->elements[i].type == 'i'){
-            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%ld", state->elements[i].data.i);
+            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%ld", state->elements[indices[i]].data.i);
             if(bytes_written > 0){
                 buffer_index += bytes_written;
             }else{
+                free(buffer);
                 return NULL;
             }
         }
@@ -116,8 +127,8 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
     }
 
     buffer[buffer_index] = '\n';
-    buffer[buffer_index + 1] = '\0';
-
+    buffer[++buffer_index] = '\0';
+    *str_len = buffer_index+1;
     return buffer;
 }
 

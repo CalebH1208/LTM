@@ -7,7 +7,7 @@
 
 #define BUFFER_LENGTH 1024
 
-void data_logging_init(uint32_t * indices_100Hz_p, uint32_t length_100Hz_p, uint32_t * indices_10Hz_p, uint32_t length_10Hz_p, uint32_t * indices_1Hz_p, uint32_t length_1Hz_p);
+void data_logging_init(CAN_metadata_t CAN_data);
 
 void data_logging_ritual();
 

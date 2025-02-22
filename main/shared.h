@@ -10,6 +10,7 @@
 #include "esp_mac.h"
 #include "sdkconfig.h"
 #include "LEDs.h"
+#include "cJSON.h"
 
 #define MOUNT_POINT "/sd_card"
 
@@ -65,5 +66,14 @@ typedef struct data_value{
     char type;
     struct data_value* next;
 }data_value_t;
+
+typedef struct{
+    uint32_t * indices_100Hz_p;
+    uint32_t length_100Hz_p;
+    uint32_t * indices_10Hz_p;
+    uint32_t length_10Hz_p;
+    uint32_t * indices_1Hz_p;
+    uint32_t length_1Hz_p;
+}CAN_metadata_t;
 
 #endif //SHARED_H

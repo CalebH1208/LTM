@@ -2,11 +2,11 @@
 
 static const char *TAG = "LTM_CAN";
 
-static data_value_t* CAN_IDs_list;
+static data_value_t** CAN_IDs_list;
 
 static int global_time_ID;
 
-esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_speed, data_value_t* CAN_ID_array, int global_time_CAN_ID){
+esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_speed, data_value_t** CAN_ID_array, int global_time_CAN_ID){
     CAN_IDs_list = CAN_ID_array;
     global_time_ID = global_time_CAN_ID;
     twai_general_config_t global_config = TWAI_GENERAL_CONFIG_DEFAULT(CAN_tx, CAN_rx, TWAI_MODE_NORMAL);
@@ -43,14 +43,16 @@ esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_
 void CAN_ritual(){
     twai_message_t CAN_frame;
 
+    uint32_t ID;
+
     while(1){
         CAN_frame.identifier = 0x00;
 
         if(twai_receive(&CAN_frame,pdMS_TO_TICKS(1000)) != ESP_OK) LOOP_AGAIN_MOTHERFUCKER;
 
-        uint32_t ID = CAN_frame.identifier % MAX_CAN_ID_COUNT;
+        ID = CAN_frame.identifier % MAX_CAN_ID_COUNT;
 
-        if(CAN_IDs_list[ID].type == '\0') LOOP_AGAIN_MOTHERFUCKER;
+        if(NULL == CAN_IDs_list[ID]) LOOP_AGAIN_MOTHERFUCKER;
 
         if(ID == global_time_ID){
             data_service_write_global_time(CAN_frame.data);
@@ -62,8 +64,9 @@ void CAN_ritual(){
 }
 
 void parse_and_store_frame(data_value_t* head, uint8_t* frame){
+    uint64_t data_block;
     do{
-        uint64_t data_block = *((uint64_t*)frame);
+        data_block = *((uint64_t*)frame);
 
         data_block = data_block << head->offset;
         data_block = data_block >> 64-head->length;

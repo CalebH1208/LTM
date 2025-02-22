@@ -13,9 +13,10 @@ LoRaModule * LoRa;
 
 uint64_t channel = 0;
 
-int32_t carNum = -1;
+int32_t car_num = -1;
 
-int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig){
+int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig, uint32_t car){
+    car_num = car;
 
     LoRa = LoRa_initialize(spiConfig->mosi,spiConfig->miso,spiConfig->clk,spiConfig->nss,spiConfig->clockspeed,spiConfig->host,&spi,NULL);
     ESP_ERROR_CHECK(LoRa_set_mode(LoRa_MODE_SLEEP, LoRa));
@@ -70,12 +71,12 @@ int LoRa_ritual(){
 }
 
 int LoRa_get_assigned_channel(){
-    if(carNum < 1){
+    if(car_num < 1){
         return ESP_ERR_INVALID_STATE;
     }
     while(0 == channel){
         LoRa_swap_channel(CHECK_IN_FREQ);
-        LoRa_Tx((uint8_t *)&carNum,sizeof(int));
+        LoRa_Tx((uint8_t *)&car_num,sizeof(int));
         
         ESP_ERROR_CHECK(LoRa_set_mode(LoRa_MODE_RX_CONT,LoRa));
         vTaskDelay(pdMS_TO_TICKS(1000)); // maybe decrease this?
@@ -91,7 +92,7 @@ void LoRa_car_rx_callback(LoRaModule* chip ,uint8_t* data,uint16_t length){
     for(int i =0; i<sizeof(int) && i < length;i++){
         recieved_car_num = recieved_car_num << 8 | data[i];
     }
-    if(recieved_car_num != carNum)return;
+    if(recieved_car_num != car_num)return;
     for(int i = sizeof(int); i < sizeof(int) + sizeof(uint64_t) && i < length; i++){
         temp_freq = temp_freq << 8 | data[i];
     }
@@ -106,8 +107,4 @@ int LoRa_swap_channel(uint64_t frequency){
     if(err != ESP_OK)return err;
     err = LoRa_set_frequency(frequency,LoRa);
     return err;
-}
-
-void set_car_num(int number){
-    carNum = number;
 }

@@ -7,10 +7,6 @@
 
 #define BUFFER_LENGTH 1024
 
-#define PATH_100HZ MOUNT_POINT"/100HzLog.csv"
-#define PATH_10HZ MOUNT_POINT"/10HzLog.csv"
-#define PATH_1HZ MOUNT_POINT"/1HzLog.csv"
-
 void data_logging_init(uint32_t * indices_100Hz_p, uint32_t length_100Hz_p, uint32_t * indices_10Hz_p, uint32_t length_10Hz_p, uint32_t * indices_1Hz_p, uint32_t length_1Hz_p);
 
 void data_logging_ritual();

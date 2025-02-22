@@ -9,8 +9,13 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "sdkconfig.h"
+#include "LEDs.h"
 
 #define MOUNT_POINT "/sd_card"
+
+#define PATH_100HZ MOUNT_POINT"/100HzLog.csv"
+#define PATH_10HZ MOUNT_POINT"/10HzLog.csv"
+#define PATH_1HZ MOUNT_POINT"/1HzLog.csv"
 
 #define MAX_CAN_ID_COUNT 256
 
@@ -54,9 +59,9 @@ typedef struct{
 }car_state_t;
 
 typedef struct data_value{
-    int index;
-    int offset;
-    int length;
+    uint32_t index;
+    uint8_t offset;
+    uint8_t length;
     char type;
     struct data_value* next;
 }data_value_t;

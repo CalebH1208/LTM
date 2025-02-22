@@ -1,19 +1,10 @@
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/gpio.h"
-#include "esp_log.h"
-#include "sdkconfig.h"
 #include "esp_task_wdt.h"
-
-#include "LEDs.h"
-#include "LoRa.h"
 
 #include "shared.h"
 
 #include "LTM_data_logging.h"
 #include "LTM_LoRa.h"
-
+#include "LTM_CAN.h"
 #include "LTM_data_service.h"
 
 bool is_sender = false;
@@ -26,10 +17,10 @@ bool is_sender = false;
 #define DIO0 21
 #define DIO1 47
 
-
 static const char *TAG = "LTM";
 
-char * parse_header_string(uint32_t * indices, uint32_t num_indices, car_state_t * state, size_t * str_len){
+//FUNCTION INCOMPLETE, NEED TO FINISH WITH CORRECT JSON DATA
+char * parse_header_string(){
     char * names_buffer = calloc(BUFFER_LENGTH, sizeof(char));
     if(NULL == names_buffer){
         return NULL;
@@ -56,26 +47,13 @@ char * parse_header_string(uint32_t * indices, uint32_t num_indices, car_state_t
         return NULL;
     }
     
-    size_t buffer_index = 0;
     size_t bytes_written = 0;
-
 
     bytes_written = snprintf(buffer, BUFFER_LENGTH, "Time, Global Time");
     if(bytes_written > 0){
         buffer_index += bytes_written;
     }else{
         return NULL;
-    }
-
-    for(int i = 0; i < num_indices; i++){
-        
-            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%s", state->elements[i]);
-            if(bytes_written > 0){
-                buffer_index += bytes_written;
-            }else{
-                return NULL;
-            }
-        
     }
 
     buffer[buffer_index] = '\n';

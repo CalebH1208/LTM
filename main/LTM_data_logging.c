@@ -28,8 +28,6 @@ void data_logging_ritual(){
     FILE * fptr_10HZ = fopen(PATH_10HZ, "a");
     FILE * fptr_1HZ = fopen(PATH_1HZ, "a");
 
-
-
     TickType_t curr_ticks;
 
     uint8_t count = 0;
@@ -37,7 +35,11 @@ void data_logging_ritual(){
     while(1){
         curr_ticks = xTaskGetTickCount();
 
-        car_state * state = data_service_get_car_state();
+        car_state_t * state = data_service_get_car_state();
+
+        if(state == NULL){
+            RUN_THAT_SHIT_BACK;
+        }
 
         size_t str_len = 0;
         struct timeval up_time;
@@ -64,63 +66,9 @@ void data_logging_ritual(){
         }
 
         free(state);
+        count++;
         xTaskDelayUntil(&curr_ticks, pdMS_TO_TICKS(10));
     }
-}
-
-char * parse_header_string(uint32_t * indices, uint32_t num_indices, car_state_t * state, size_t * str_len){
-    char * names_buffer = calloc(BUFFER_LENGTH, sizeof(char));
-    if(NULL == names_buffer){
-        return NULL;
-    }
-    
-    char * units_buffer = calloc(BUFFER_LENGTH, sizeof(char));
-    if(NULL == units_buffer){
-        free(names_buffer);
-        return NULL;
-    }
-
-    char * conversion_buffer = calloc(BUFFER_LENGTH, sizeof(char));
-    if(NULL == conversion_buffer ){
-        free(names_buffer);
-        free(units_buffer);
-        return NULL;
-    }
-
-    char* precision_buffer = calloc(BUFFER_LENGTH, sizeof(char));
-    if(NULL == precision_buffer){
-        free(names_buffer);
-        free(units_buffer);
-        free(conversion_buffer);
-        return NULL;
-    }
-    
-    size_t buffer_index = 0;
-    size_t bytes_written = 0;
-
-
-    bytes_written = snprintf(buffer, BUFFER_LENGTH, "Time, Global Time");
-    if(bytes_written > 0){
-        buffer_index += bytes_written;
-    }else{
-        return NULL;
-    }
-
-    for(int i = 0; i < num_indices; i++){
-        
-            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%s", state->elements[i]);
-            if(bytes_written > 0){
-                buffer_index += bytes_written;
-            }else{
-                return NULL;
-            }
-        
-    }
-
-    buffer[buffer_index] = '\n';
-    buffer[buffer_index + 1] = '\0';
-
-    return buffer;
 }
 
 char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t * state, size_t * str_len, int64_t up_time){

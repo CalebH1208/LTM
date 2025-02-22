@@ -2,7 +2,7 @@
 
 static const char *TAG = "LTM_CAN";
 
-data_value_t* CAN_IDs_list;
+static data_value_t* CAN_IDs_list;
 
 static int global_time_ID;
 
@@ -48,7 +48,7 @@ void CAN_ritual(){
 
         if(twai_receive(&CAN_frame,pdMS_TO_TICKS(1000)) != ESP_OK) LOOP_AGAIN_MOTHERFUCKER;
 
-        int ID = CAN_frame.identifier % MAX_CAN_ID_COUNT;
+        uint32_t ID = CAN_frame.identifier % MAX_CAN_ID_COUNT;
 
         if(CAN_IDs_list[ID].type == '\0') LOOP_AGAIN_MOTHERFUCKER;
 
@@ -67,7 +67,7 @@ void parse_and_store_frame(data_value_t* head, uint8_t* frame){
 
         data_block = data_block << head->offset;
         data_block = data_block >> 64-head->length;
-        
+
         data_service_write(head->index,(uint32_t)data_block);
         head = head->next;
     }while(head != NULL);

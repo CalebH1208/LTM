@@ -1,17 +1,17 @@
 #include "LTM_data_logging.h"
 
-static const signed char *TAG = "Data Logging";
+static const char *TAG = "Data Logging";
 
-uint32_t * indices_100Hz;
-uint32_t length_100Hz;
+static uint32_t * indices_100Hz;
+static uint32_t length_100Hz;
 
-uint32_t * indices_10Hz;
-uint32_t length_10Hz;
+static uint32_t * indices_10Hz;
+static uint32_t length_10Hz;
 
-uint32_t * indices_1Hz;
-uint32_t length_1Hz;
+static uint32_t * indices_1Hz;
+static uint32_t length_1Hz;
 
-void data_logging_init(CAN_metadata_t CAN_data){
+esp_err_t data_logging_init(CAN_metadata_t CAN_data){
     indices_100Hz = CAN_data.indices_100Hz_p;
     length_100Hz = CAN_data.length_100Hz_p;
     indices_10Hz = CAN_data.indices_10Hz_p;
@@ -19,6 +19,7 @@ void data_logging_init(CAN_metadata_t CAN_data){
     indices_1Hz = CAN_data.indices_1Hz_p;
     length_1Hz = CAN_data.length_1Hz_p;
     ESP_LOGI(TAG,"Data logging init successful");
+    return ESP_OK;
 }
 
 void data_logging_ritual(){
@@ -49,7 +50,7 @@ void data_logging_ritual(){
         str_len = 0;
         
         gettimeofday(&up_time,NULL);
-        up_time_ms = (int64_t)up_time.sec * 1000000L + (int64_t)up_time.usec;
+        up_time_ms = (int64_t)up_time.tv_sec * 1000000L + (int64_t)up_time.tv_usec;
 
         csv_string = parse_data_string(indices_100Hz, length_100Hz, state, &str_len, up_time_ms);
         write_data(csv_string, str_len, fptr_100HZ);

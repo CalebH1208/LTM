@@ -28,13 +28,13 @@ typedef struct {
     gpio_num_t Activity_LED;
   }LoRa_config_t;
 
-int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig);
+int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig,uint32_t car_num);
 
 int LoRa_Tx(uint8_t* data, int length);
 
 int LoRa_get_assigned_channel();
 
-int LoRa_ritual();
+void LoRa_ritual();
 
 int LoRa_paddck_ritual();
 

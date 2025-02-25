@@ -46,10 +46,10 @@ esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len){
         xSemaphoreGive(read_lock);
     }
 
-    data = (uint32_t *)data;
+    uint32_t * full_val = (uint32_t *)data;
 
     for(uint32_t i = 0; i < LoRa_adrr_array_length; i++){
-        data[i] = temp_elements_copy[LoRa_adrr_array[i]].data.u;
+        full_val[i] = temp_elements_copy[LoRa_adrr_array[i]].data.u;
     }
 
     *len = sizeof(uint32_t) * LoRa_adrr_array_length;
@@ -63,9 +63,9 @@ car_state_t * data_service_get_car_state(){
         return NULL;
     }
 
-    temp_state_copy.elements = malloc(car_state->data_length * sizeof(car_element_t));
+    temp_state_copy->elements = malloc(car_state->data_length * sizeof(car_element_t));
 
-    if(temp_state_copy.elements == NULL){
+    if(temp_state_copy->elements == NULL){
         free(temp_state_copy);
         return NULL;
     }
@@ -98,7 +98,7 @@ esp_err_t data_service_write(uint32_t index, uint32_t data){
 
     writer_count--;
     if(0 == writer_count){
-        xSemaphoreGive(writer_lock);
+        xSemaphoreGive(write_lock);
     }
 
     return ESP_OK;
@@ -120,7 +120,7 @@ esp_err_t data_service_write_global_time(uint8_t* frame_data){
 
     writer_count--;
     if(0 == writer_count){
-        xSemaphoreGive(writer_lock);
+        xSemaphoreGive(write_lock);
     }
     
     return ESP_OK;

@@ -13,19 +13,24 @@ esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_
     twai_timing_config_t timing_config;
     switch(bus_speed){
         case(CAN_1MBITS):
-            timing_config = TWAI_TIMING_CONFIG_1MBITS();
+            twai_timing_config_t timing_1000000 = TWAI_TIMING_CONFIG_1MBITS();
+            timing_config = timing_1000000;
             break;
         case(CAN_500KBITS):
-            timing_config = TWAI_TIMING_CONFIG_500KBITS();
+            twai_timing_config_t timing_500000 = TWAI_TIMING_CONFIG_500KBITS();
+            timing_config = timing_500000;
             break;
         case(CAN_250KBITS):
-            timing_config = TWAI_TIMING_CONFIG_250KBITS();
+            twai_timing_config_t timing_250000 = TWAI_TIMING_CONFIG_250KBITS();
+            timing_config = timing_250000;
             break;
         case(CAN_100KBITS):
-            timing_config = TWAI_TIMING_CONFIG_100KBITS();
+            twai_timing_config_t timing_100000 = TWAI_TIMING_CONFIG_100KBITS();
+            timing_config = timing_100000;
             break;
         case(CAN_50KBITS):
-            timing_config = TWAI_TIMING_CONFIG_50KBITS();
+            twai_timing_config_t timing_50000 = TWAI_TIMING_CONFIG_50KBITS();
+            timing_config = timing_50000;
             break;
         default:
             return ESP_ERR_INVALID_ARG;
@@ -69,7 +74,7 @@ void parse_and_store_frame(data_value_t* head, uint8_t* frame){
         data_block = *((uint64_t*)frame);
 
         data_block = data_block << head->offset;
-        data_block = data_block >> 64-head->length;
+        data_block = data_block >> (64 - (head->length));
 
         data_service_write(head->index,(uint32_t)data_block);
         head = head->next;

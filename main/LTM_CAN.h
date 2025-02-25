@@ -10,7 +10,7 @@
 #define CAN_ACCEPTANCE_CODE 0x700
 #define CAN_ACCEPTANCE_MASK 0x7FF
 
-esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_speed, data_value_t** CAN_ID_array);
+esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_speed, data_value_t** CAN_ID_array, int global_time_CAN_ID);
 
 void CAN_ritual();
 

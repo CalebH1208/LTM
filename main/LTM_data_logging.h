@@ -4,10 +4,11 @@
 #include "shared.h"
 #include "LTM_data_service.h"
 #include "esp_mac.h"
+#include <sys/time.h>
 
 #define BUFFER_LENGTH 1024
 
-void data_logging_init(CAN_metadata_t CAN_data);
+esp_err_t data_logging_init(CAN_metadata_t CAN_data);
 
 void data_logging_ritual();
 

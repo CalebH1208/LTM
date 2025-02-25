@@ -52,7 +52,7 @@ int LoRa_Tx(uint8_t* data, int length){
     return ESP_OK;
 }
 
-int LoRa_ritual(){
+void LoRa_ritual(){
     TickType_t last_assignment = xTaskGetTickCount();
     TickType_t curr_ticks;
     while(1){ //lol
@@ -87,8 +87,8 @@ int LoRa_get_assigned_channel(){
 
 void LoRa_car_rx_callback(LoRaModule* chip ,uint8_t* data,uint16_t length){
     LED_on(LoRa->Activity_LED);
-    int recieved_car_num;
-    uint64_t temp_freq;
+    int recieved_car_num = -1;
+    uint64_t temp_freq = 0;
     for(int i =0; i<sizeof(int) && i < length;i++){
         recieved_car_num = recieved_car_num << 8 | data[i];
     }
@@ -108,3 +108,4 @@ int LoRa_swap_channel(uint64_t frequency){
     err = LoRa_set_frequency(frequency,LoRa);
     return err;
 }
+

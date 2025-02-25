@@ -16,7 +16,7 @@
 #define UNIT_MAX_BUFFER_LEN 8
 
 #define SD_SLOT 1
-#define SD_BUS_WIDTH 4
+#define SD_BUS_WIDTH 1
 #define SD_BUS_FREQ 40000
 
 typedef struct {
@@ -38,10 +38,12 @@ typedef struct init_structure{
 
 esp_err_t SD_init(sdmmc_slot_config_t* config);
 
-esp_err_t parse_JSON_globals(valid_CAN_speeds_t* bus_speed, data_value_t*** CAN_ID_array, car_state_t* car_state);
+esp_err_t parse_JSON_globals(init_parameters params);
 
-esp_err_t parse_JSON_CAN(CAN_metadata_t* can_data, car_state_t* car_state, uint32_t** LoRa_array, uint32_t* LoRa_array_length);
+esp_err_t finish_initialization();
 
 esp_err_t write_header();
+
+esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indices);
 
 #endif //INIT_H

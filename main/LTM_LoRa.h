@@ -34,14 +34,12 @@ int LoRa_Tx(uint8_t* data, int length);
 
 int LoRa_get_assigned_channel();
 
-int LoRa_car_ritual();
+int LoRa_ritual();
 
 int LoRa_paddck_ritual();
 
 void LoRa_car_rx_callback(LoRaModule* chip ,uint8_t* data,uint16_t length);
 
 int LoRa_swap_channel(uint64_t frequency);
-
-void set_car_num(int number);
 
 #endif //LTM_LORA_H

@@ -63,7 +63,6 @@ typedef struct data_value{
     uint32_t index;
     uint8_t offset;
     uint8_t length;
-    char type;
     struct data_value* next;
 }data_value_t;
 

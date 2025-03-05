@@ -20,8 +20,16 @@
 
 #define MAX_CAN_ID_COUNT 256
 
+#define NAME_MAX_BUFFER_LEN 32
+#define UNIT_MAX_BUFFER_LEN 8
+
 #define RUN_THAT_SHIT_BACK continue // are you having fun yet?
 #define LOOP_AGAIN_MOTHERFUCKER continue // calebs version of fun
+
+typedef enum{
+    PADDOCK,
+    CAR
+}LTM_type_t;
 
 typedef enum{
     CAN_1MBITS,
@@ -58,6 +66,25 @@ typedef struct{
     global_time_t time;
     car_element_t * elements;
 }car_state_t;
+
+typedef struct{
+    char name[NAME_MAX_BUFFER_LEN];
+    float conversion;
+    char unit[UNIT_MAX_BUFFER_LEN];
+    char type;
+    value_union_t data;
+}paddock_element_t;
+
+typedef struct{
+    int32_t car_number;
+    int32_t array_length;
+    paddock_element_t* elements;
+}paddock_state_t;
+
+typedef struct{
+    uint8_t num_cars;
+    paddock_state_t * cars;
+}paddock_array_t;
 
 typedef struct data_value{
     uint32_t index;

@@ -13,7 +13,7 @@ LoRaModule * LoRa;
 
 uint64_t channel = 0;
 
-int32_t car_num = -1;
+int car_num = -1;
 
 int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig, uint32_t car){
     car_num = car;
@@ -77,9 +77,9 @@ int LoRa_get_assigned_channel(){
     while(0 == channel){
         LoRa_swap_channel(CHECK_IN_FREQ);
         LoRa_Tx((uint8_t *)&car_num,sizeof(int));
-        
+        //ESP_LOGI(TAG,"car num sent: %d",car_num);
         ESP_ERROR_CHECK(LoRa_set_mode(LoRa_MODE_RX_CONT,LoRa));
-        vTaskDelay(pdMS_TO_TICKS(1000)); // maybe decrease this?
+        vTaskDelay(pdMS_TO_TICKS(SEND_CHANNEL_REQUEST_PERIOD)); // maybe decrease this?
     }
     LoRa_swap_channel(channel);
     return ESP_OK;
@@ -94,7 +94,7 @@ void LoRa_car_rx_callback(LoRaModule* chip ,uint8_t* data,uint16_t length){
     }
     if(recieved_car_num != car_num)return;
     for(int i = sizeof(int); i < sizeof(int) + sizeof(uint64_t) && i < length; i++){
-        temp_freq = temp_freq << 8 | data[i];
+        temp_freq = temp_freq << 8 | data[i];      
     }
     if(temp_freq < 900000000 || temp_freq > 915000000)return;
     channel = temp_freq;

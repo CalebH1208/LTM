@@ -11,6 +11,8 @@ StaticSemaphore_t write_lock_buffer;
 
 static car_state_t* car_state;
 
+static paddock_array_t* paddock_array;
+
 static uint32_t* LoRa_adrr_array;
 static uint32_t LoRa_adrr_array_length;
 
@@ -21,6 +23,22 @@ esp_err_t data_service_init(car_state_t* state, uint32_t* LoRa_array, uint32_t a
 
     read_lock = xSemaphoreCreateBinaryStatic(&read_lock_buffer);
     write_lock = xSemaphoreCreateBinaryStatic(&write_lock_buffer);
+
+    xSemaphoreGive(read_lock);
+    xSemaphoreGive(write_lock);
+
+    ESP_LOGI(TAG, "Data Service Init Success");
+    return ESP_OK;
+}
+
+esp_err_t data_service_init_paddock(paddock_state_t* state){
+    paddock_state = state;
+
+    read_lock = xSemaphoreCreateBinaryStatic(&read_lock_buffer);
+    write_lock = xSemaphoreCreateBinaryStatic(&write_lock_buffer);
+
+    xSemaphoreGive(read_lock);
+    xSemaphoreGive(write_lock);
 
     ESP_LOGI(TAG, "Data Service Init Success");
     return ESP_OK;
@@ -33,10 +51,12 @@ esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len){
         return ESP_ERR_NO_MEM;
     }
 
+    ESP_LOGW(TAG, "attempting to take semphore lora data, r: %d  |  w:%d",reader_count, writer_count);
     if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){
         free(temp_elements_copy);
         return ESP_ERR_INVALID_RESPONSE;
     }
+    ESP_LOGW(TAG, "success lora state, r: %d  |  w:%d",reader_count, writer_count);
     reader_count++;
 
     memcpy(temp_elements_copy, car_state->elements, car_state->data_length * sizeof(car_element_t));
@@ -60,6 +80,7 @@ esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len){
 car_state_t * data_service_get_car_state(){
     car_state_t * temp_state_copy = malloc(sizeof(car_state_t));
     if(temp_state_copy == NULL){
+        ESP_LOGE(TAG, "malloc failed on temp state cpy");
         return NULL;
     }
 
@@ -67,12 +88,16 @@ car_state_t * data_service_get_car_state(){
 
     if(temp_state_copy->elements == NULL){
         free(temp_state_copy);
+        ESP_LOGE(TAG, "malloc failed on elements shit");
         return NULL;
     }
-
+    // ESP_LOGW(TAG, "attempting to take semphore car state, r: %d  |  w:%d",reader_count, writer_count);
     if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){
+        free(temp_state_copy);
+        ESP_LOGE(TAG, "semaphor timed out");
         return NULL;
     }
+    // ESP_LOGW(TAG, "success car state, r: %d  |  w:%d",reader_count, writer_count);
     reader_count++;
 
     temp_state_copy->car_number = car_state->car_number;
@@ -89,9 +114,11 @@ car_state_t * data_service_get_car_state(){
 }
 
 esp_err_t data_service_write(uint32_t index, uint32_t data){
+    // ESP_LOGW(TAG, "attempting to take semphore write, r: %d  |  w:%d",reader_count, writer_count);
     if(data_service_handle_semaphor(read_lock, write_lock) != ESP_OK){
         return ESP_ERR_INVALID_RESPONSE;
     }
+    //ESP_LOGW(TAG, "success write, r: %d  |  w:%d",reader_count, writer_count);
     writer_count++;
 
     car_state->elements[index].data.u = data;
@@ -126,8 +153,99 @@ esp_err_t data_service_write_global_time(uint8_t* frame_data){
     return ESP_OK;
 }
 
+char** data_service_get_paddock_array(uint8_t * LoRa_cars_array, uint8_t LoRa_car_length){
+    // paddock_array_t * temp_array_copy = malloc(sizeof(paddock_array_t));
+    // if(temp_array_copy == NULL){
+    //     ESP_LOGE(TAG, "malloc failed on temp state cpy");
+    //     return NULL;
+    // }
+
+    // temp_array_copy->num_cars = paddock_array->num_cars;
+
+    // temp_array_copy->cars = malloc(sizeof(paddock_state_t)* temp_array_copy->num_cars);
+
+    // if(temp_array_copy->cars == NULL){
+    //     free(temp_array_copy);
+    //     ESP_LOGE(TAG, "malloc failed on copy cars");
+    //     return NULL;
+    // }
+
+    // temp_array_copy->cars->elements = malloc(paddock_state->data_length * sizeof(paddock_element_t));
+
+    // if(temp_array_copy->cars->elements == NULL){
+    //     free(temp_array_copy->cars);
+    //     free(temp_array_copy);
+    //     ESP_LOGE(TAG, "malloc failed on elements");
+    //     return NULL;
+    // }
+
+    // ESP_LOGW(TAG, "attempting to take semphore paddock state, r: %d  |  w:%d",reader_count, writer_count);
+    if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){
+        free(temp_array_copy->cars->elements);
+        free(temp_array_copy->cars);
+        free(temp_array_copy);
+        ESP_LOGE(TAG, "semaphor timed out");
+        return NULL;
+    }
+    // ESP_LOGW(TAG, "success car state, r: %d  |  w:%d",reader_count, writer_count);
+    reader_count++;
+
+    // for(int i = 0; i < temp_array_copy->num_cars; i++){
+    //     temp_array_copy->cars[i].car_number = paddock_array->cars[i].car_number;
+    //     temp_array_copy->cars[i].array_length = paddock_array->cars[i].array_length;
+
+
+    //     // for(int j = 0; j < temp_array_copy->cars[i].array_length; j++){
+    //     //     temp_array_copy->cars[i]
+    //     // }
+    // }
+
+    for(int i = 0; i < LoRa_car_length; i++){
+
+    }
+
+    char paddock_serial_buffer[CAR_SERIAL_BUFFER_SIZE];
+
+    // for(int i = 0; i < temp_array_copy->num_cars; i++){
+    //     temp_array_copy->cars[i].car_number = paddock_array->cars[i].car_number;
+    //     temp_array_copy->cars[i].array_length = paddock_array->cars[i].array_length;
+
+
+    //     // for(int j = 0; j < temp_array_copy->cars[i].array_length; j++){
+    //     //     temp_array_copy->cars[i]
+    //     // }
+    // }
+
+    reader_count--;
+    if(0 == reader_count){
+        xSemaphoreGive(read_lock);
+    }
+
+    return temp_state_copy;
+}
+
+esp_err_t data_service_write_paddock(uint32_t index, uint32_t data){
+    // ESP_LOGW(TAG, "attempting to take semphore write, r: %d  |  w:%d",reader_count, writer_count);
+    if(data_service_handle_semaphor(read_lock, write_lock) != ESP_OK){
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    //ESP_LOGW(TAG, "success write, r: %d  |  w:%d",reader_count, writer_count);
+    writer_count++;
+
+    car_state->elements[index].data.u = data;
+
+    writer_count--;
+    if(0 == writer_count){
+        xSemaphoreGive(write_lock);
+    }
+
+    return ESP_OK;
+}
+
+// if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){
 esp_err_t data_service_handle_semaphor(SemaphoreHandle_t checkSemaphore, SemaphoreHandle_t takeSemaphore){
     if(xSemaphoreTake(checkSemaphore, pdMS_TO_TICKS(SEMAPHORE_WAIT_TIME_MS)) != pdTRUE){
+        ESP_LOGE(TAG,"semaphore error check: %d  | take: %d",uxSemaphoreGetCount(checkSemaphore), uxSemaphoreGetCount(takeSemaphore));
         return ESP_ERR_TIMEOUT;
     }
     xSemaphoreTake(takeSemaphore, 0);

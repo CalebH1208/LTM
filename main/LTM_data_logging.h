@@ -16,4 +16,6 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
 
 void write_data(char * data, size_t data_length, FILE * fptr);
 
+void write_data_no_free(char * data, size_t data_length, FILE * fptr);
+
 #endif //LTM_DATA_LOGGING_H

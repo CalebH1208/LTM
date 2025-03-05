@@ -35,10 +35,10 @@ esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_
         default:
             return ESP_ERR_INVALID_ARG;
    }
-   twai_filter_config_t filter_config;
-   filter_config.acceptance_code = CAN_ACCEPTANCE_CODE;
-   filter_config.acceptance_mask = CAN_ACCEPTANCE_MASK;
-   filter_config.single_filter = true;
+   twai_filter_config_t filter_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+//    filter_config.acceptance_code = CAN_ACCEPTANCE_CODE;
+//    filter_config.acceptance_mask = CAN_ACCEPTANCE_MASK;
+//    filter_config.single_filter = true;
    ESP_ERROR_CHECK(twai_driver_install(&global_config, &timing_config, &filter_config));
    ESP_ERROR_CHECK(twai_start());
    ESP_LOGI(TAG,"CAN init success :)");
@@ -53,10 +53,12 @@ void CAN_ritual(){
     while(1){
         CAN_frame.identifier = 0x00;
 
-        if(twai_receive(&CAN_frame,pdMS_TO_TICKS(1000)) != ESP_OK) LOOP_AGAIN_MOTHERFUCKER;
-
+        if(twai_receive(&CAN_frame,pdMS_TO_TICKS(1000)) != ESP_OK){ 
+            //SP_LOGE(TAG,"No CAN was recieved looping again");
+            LOOP_AGAIN_MOTHERFUCKER;
+        }
         ID = CAN_frame.identifier % MAX_CAN_ID_COUNT;
-
+        ESP_LOGI(TAG,"the id: %ld",ID);
         if(NULL == CAN_IDs_list[ID]) LOOP_AGAIN_MOTHERFUCKER;
 
         if(ID == global_time_ID){
@@ -70,12 +72,16 @@ void CAN_ritual(){
 
 void parse_and_store_frame(data_value_t* head, uint8_t* frame){
     uint64_t data_block;
+    
     do{
-        data_block = *((uint64_t*)frame);
-
+        for(int i = 7;i>=0;i--){
+            data_block |= (uint64_t)frame[i] << 8*(7-i); 
+        }
+        ESP_LOGI(TAG,"data: %lld",data_block);
+        ESP_LOGI(TAG,"offset: %d | length: %d",head->offset,head->length);
         data_block = data_block << head->offset;
         data_block = data_block >> (64 - (head->length));
-
+        ESP_LOGI(TAG,"data: %lld",data_block);
         data_service_write(head->index,(uint32_t)data_block);
         head = head->next;
     }while(head != NULL);

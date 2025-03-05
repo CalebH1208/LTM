@@ -27,9 +27,13 @@ void data_logging_ritual(){
     FILE * fptr_10HZ = fopen(PATH_10HZ, "a");
     FILE * fptr_1HZ = fopen(PATH_1HZ, "a");
 
+    if(NULL == fptr_100HZ || NULL == fptr_10HZ || NULL == fptr_1HZ){
+        ESP_LOGE(TAG, "The data logging files failed to open");
+    }
+
     TickType_t curr_ticks;
 
-    uint8_t count = 0;
+    uint32_t count = 0;
     car_state_t * state;
 
     size_t str_len;
@@ -44,8 +48,14 @@ void data_logging_ritual(){
         state = data_service_get_car_state();
 
         if(state == NULL){
+            ESP_LOGE(TAG, "data service fail");
+            count++;
+            //ESP_LOGI(TAG,"this is the count: %ld",count);
+            xTaskDelayUntil(&curr_ticks, pdMS_TO_TICKS(10));
             RUN_THAT_SHIT_BACK;
         }
+
+        // ESP_LOGI(TAG,"State Info: %d %ld",state->time.day, state->car_number);
 
         str_len = 0;
         
@@ -53,6 +63,7 @@ void data_logging_ritual(){
         up_time_ms = (int64_t)up_time.tv_sec * 1000000L + (int64_t)up_time.tv_usec;
 
         csv_string = parse_data_string(indices_100Hz, length_100Hz, state, &str_len, up_time_ms);
+        //ESP_LOGI(TAG,"csv string: %s | strlen: %d",csv_string,str_len);
         write_data(csv_string, str_len, fptr_100HZ);
 
         if(count % 10 == 0){
@@ -64,17 +75,26 @@ void data_logging_ritual(){
             csv_string = parse_data_string(indices_1Hz, length_1Hz, state, &str_len, up_time_ms);
             write_data(csv_string, str_len, fptr_1HZ);
 
-            fflush(fptr_100HZ);
-            fflush(fptr_10HZ);
-            fflush(fptr_1HZ);
+            //fflush(fptr_100HZ);
+            // fflush(fptr_10HZ);
+            // fflush(fptr_1HZ);
+            // fsync();
+            
+            fclose(fptr_100HZ);
+            fclose(fptr_10HZ);
+            fclose(fptr_1HZ);
 
-            count = 0;
+            fptr_100HZ = fopen(PATH_100HZ, "a");
+            fptr_10HZ = fopen(PATH_10HZ, "a");
+            fptr_1HZ = fopen(PATH_1HZ, "a");
+
         }
 
         count++;
         
+        free(state->elements);
         free(state);
-
+        // ESP_LOGI(TAG,"this is the count: %ld",count);
         xTaskDelayUntil(&curr_ticks, pdMS_TO_TICKS(10));
     }
 }
@@ -98,6 +118,7 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
         return NULL;
     }
 
+    //if(num_indices >0)ESP_LOGI(TAG,"%c\n",state->elements[0].type);
     for(int i = 0; i < num_indices; i++){
         if(state->elements[i].type == 'f'){
             bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%.7f", state->elements[indices[i]].data.f);
@@ -126,7 +147,7 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
         }
         
     }
-
+    
     buffer[buffer_index] = '\n';
     buffer[++buffer_index] = '\0';
     *str_len = buffer_index+1;
@@ -141,4 +162,13 @@ void write_data(char * data, size_t data_length, FILE * fptr){
     }
     fwrite(data, sizeof(uint8_t), data_length, fptr);
     free(data);
+}
+
+void write_data_no_free(char * data, size_t data_length, FILE * fptr){
+    if(data == NULL)return;
+    if(data_length == 0 || fptr == NULL){
+        free(data);
+        return;
+    }
+    fwrite(data, sizeof(uint8_t), data_length, fptr);
 }

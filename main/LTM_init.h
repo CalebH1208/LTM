@@ -3,7 +3,10 @@
 
 #include "esp_vfs_fat.h"
 #include "driver/sdmmc_host.h"
+#include "sdmmc_cmd.h"
 #include "cJSON.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "shared.h"
 
@@ -12,16 +15,19 @@
 #include "LTM_CAN.h"
 #include "LTM_data_service.h"
 
-#define NAME_MAX_BUFFER_LEN 32
-#define UNIT_MAX_BUFFER_LEN 8
-
-#define SD_SLOT 1
+#define SD_SLOT 0
 #define SD_BUS_WIDTH 1
-#define SD_BUS_FREQ 40000
+
+#define SD_BUS_FREQ 20000
+
+#define SPI_SPEED 10000000
+#define LORA_DEFAULT_FREQUENCY 915000000
 
 typedef struct {
+    LTM_type_t* LTM_type;
     valid_CAN_speeds_t* bus_speed;
     car_state_t* car_state;
+    paddock_array_t* paddock_array;
     int* global_time_id;
     CAN_metadata_t* can_data;
     uint32_t** LoRa_array;

@@ -10,6 +10,8 @@
 
 #define SEND_FREQUENCY 20
 
+#define SEND_CHANNEL_REQUEST_PERIOD 100
+
 typedef struct {
     int mosi;
     int miso;

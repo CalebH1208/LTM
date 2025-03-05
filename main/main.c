@@ -4,6 +4,7 @@
 
 #include "LTM_init.h"
 #include "LTM_CAN.h"
+#include "LTM_serial_service.h"
 
 bool is_sender = false;
 
@@ -92,6 +93,7 @@ void app_main(void){
     ESP_ERROR_CHECK(SD_init(&SD));
     ESP_ERROR_CHECK(parse_JSON_globals(initialization_parameters));
     if(LTM_type == CAR){
+        ESP_LOGI(TAG,"THIS IS A CAR SIDE ESP");
         ESP_ERROR_CHECK(write_header());
         ESP_ERROR_CHECK(finish_initialization());
         //ESP_LOGI(TAG,"LENGTHS: %ld | %ld | %ld\n",can_metadata.indices_100Hz_p[0],can_metadata.indices_10Hz_p[0], can_metadata.indices_10Hz_p[1]);
@@ -108,8 +110,13 @@ void app_main(void){
         ESP_LOGI(TAG, "rituals ran");
     }
     else{
-        ESP_ERROR_CHECK(data_service_init_paddock(paddock_array));
-        ESP_ERROR_CHECK(LoRa_Init(&spi,&LoRa,car_state.car_number));
+        ESP_LOGI(TAG,"THIS IS THE PADDOCK SIDE ESP");
+        ESP_ERROR_CHECK(serial_service_init(&paddock_array));
+        ESP_ERROR_CHECK(LoRa_Init(&spi,&LoRa,0));
+        ESP_LOGI(TAG, "inits ran");
+
+        xTaskCreate(LoRa_paddock_ritual, "LoRa Ritual", 16384, NULL, 2, NULL);
+        ESP_LOGI(TAG, "rituals ran");
     }
 
 #ifdef PRINT_RUN_STATS

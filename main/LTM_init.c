@@ -27,8 +27,8 @@ esp_err_t SD_init(sdmmc_slot_config_t* SD_config){
     return ESP_OK;
 }
 
-esp_err_t parse_JSON_globals_paddock(init_parameters params);
-esp_err_t parse_JSON_globals_car(init_parameters params);
+esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root);
+esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root);
 
 esp_err_t parse_JSON_globals(init_parameters params){
     char config_file_path[] = MOUNT_POINT"/config.txt";
@@ -94,15 +94,17 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     cJSON* car_iterable;
     int index =0;
     cJSON_ArrayForEach(car_iterable,JSON_paddock_array){
-        cJSON* cJSON_car_num = cJSON(car_iterable,"CN");
+        cJSON* cJSON_car_num = cJSON_GetObjectItemCaseSensitive(car_iterable,"CN");
         paddock_state_array[index].car_number = cJSON_car_num->valueint;
         cJSON* car_data_array = cJSON_GetObjectItemCaseSensitive(car_iterable,"ITEMS");
         paddock_state_array[index].array_length = cJSON_GetArraySize(car_data_array);
+
         paddock_state_array[index].elements = malloc(sizeof(paddock_element_t) * paddock_state_array[index].array_length);
-        if(NULL == paddock_state_array[index]){
+        if(NULL == paddock_state_array[index].elements){
             free(paddock_state_array);
             return ESP_ERR_NO_MEM;
         }
+
         cJSON* item_iterable = NULL;
         int jmdex = 0;
         cJSON_ArrayForEach(item_iterable,car_data_array){
@@ -111,11 +113,13 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
             cJSON* name = cJSON_GetObjectItemCaseSensitive(item_iterable,"N");
             cJSON* type = cJSON_GetObjectItemCaseSensitive(item_iterable,"T");
             cJSON* prec = cJSON_GetObjectItemCaseSensitive(item_iterable,"P");
-            paddock_state_array[index].elements[jmdex].name = name->valuestring;
-            paddock_state_array[index].elements[jmdex].unit = unit->valuestring;
-            paddock_state_array[index].elements[jmdex].conversion = (float) conv->valuedouble * (float)prec->valuedouble;
-            paddock_state_array[index].elements[jmdex].type = (char)name->valueint;
+
+            strcpy(paddock_state_array[index].elements[jmdex].name, name->valuestring);
+            strcpy(paddock_state_array[index].elements[jmdex].unit, unit->valuestring);
+            paddock_state_array[index].elements[jmdex].conversion = (float) conv->valuedouble / (float)prec->valuedouble;
+            paddock_state_array[index].elements[jmdex].type = (char)type->valueint;
             paddock_state_array[index].elements[jmdex].data.u = 0;
+
             jmdex++;
         }
         index++;
@@ -123,6 +127,8 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
 
     paddock_array->cars = paddock_state_array;
     paddock_array->num_cars = array_len;
+
+    return ESP_OK;
 }
 
 esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
@@ -137,8 +143,6 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
 
     cJSON* JSON_bus_speed = cJSON_GetObjectItemCaseSensitive(root,"BS");
     if (!cJSON_IsNumber(JSON_bus_speed)){
-        cJSON_Delete(root);
-        free(json_data);
         ESP_LOGE(TAG,"Invalid config");
         return ESP_ERR_INVALID_STATE;
     }
@@ -166,8 +170,6 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
     cJSON* GID = cJSON_GetObjectItemCaseSensitive(root, "GID");
 
     if(!cJSON_IsNumber(car_num) || !cJSON_IsNumber(GID)){
-        cJSON_Delete(root);
-        free(json_data);
         ESP_LOGE(TAG,"Invalid config");
         return ESP_ERR_NOT_FINISHED;
     }
@@ -190,8 +192,6 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
     *CAN_ID_array = calloc(MAX_CAN_ID_COUNT, sizeof(data_value_t*));
 
     if(NULL == car_state->elements){
-        cJSON_Delete(root);
-        free(json_data);
         ESP_LOGE(TAG,"Invalid config");
         return ESP_ERR_NO_MEM;
     }
@@ -271,6 +271,7 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
     can_data->length_1Hz_p = length_1Hz;
 
     //// the end of the car side parsing
+    return ESP_OK;
 }
 
 esp_err_t finish_initialization(){

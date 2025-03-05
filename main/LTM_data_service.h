@@ -1,3 +1,5 @@
+#ifndef LTM_DATA_SERVICE_H
+#define LTM_DATA_SERVICE_H
 #include "shared.h"
 
 #define SEMAPHORE_WAIT_TIME_MS 100
@@ -16,3 +18,5 @@ esp_err_t data_service_write(uint32_t index, uint32_t data);
 esp_err_t data_service_write_global_time(uint8_t* frame_data);
 
 esp_err_t data_service_handle_semaphor(SemaphoreHandle_t checkSemaphore, SemaphoreHandle_t takeSemaphore);
+
+#endif //LTM_DATA_SERVICE_H

@@ -129,6 +129,7 @@ void LoRa_paddock_ritual(){
     TickType_t curr_ticks;
     while(1){
         curr_ticks = xTaskGetTickCount();
+        serial_clear_on_next_printf(true);
         for(int i = 1; i < NUMBER_OF_CHANNELS;i++){
             //printf("%ld ,%ld, %d, i=%d\n",channels[i].expiry , curr_ticks, channels[i].expiry > curr_ticks,i);
             if(channels[i].expiry > curr_ticks){

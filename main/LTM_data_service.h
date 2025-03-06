@@ -9,7 +9,7 @@ esp_err_t data_service_init(car_state_t* state, uint32_t* LoRa_array, uint32_t a
 
 esp_err_t data_service_init_paddock(paddock_array_t* array);
 
-esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len);
+esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len, int car_num);
 
 car_state_t * data_service_get_car_state();
 

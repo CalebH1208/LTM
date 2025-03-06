@@ -17,18 +17,32 @@
 
 #define CHANNEL_STEP 1500000
 
-#define CHANNEL_WAIT_TIME_MS 30
+#define CHANNEL_WAIT_TIME_MS 100
 
+#define CHECK_IN_WAIT_TIME_MS 100
 
 // get the number of ticks that occur in 30 seconds
  // maybe higher?
-#define TICKS_TILL_NEXT_ASSIGNMENT portTICK_PERIOD_MS*30000
+#define TICKS_TILL_NEXT_ASSIGNMENT portTICK_PERIOD_MS*300
 
-#define TICKS_TILL_CHANNEL_EXPIRE TICKS_TILL_NEXT_ASSIGNMENT+1000*portTICK_PERIOD_MS
+#define TICKS_TILL_CHANNEL_EXPIRE TICKS_TILL_NEXT_ASSIGNMENT
+
+typedef enum{
+  CHANNEL_9150,
+  CHANNEL_9135,
+  CHANNEL_9120,
+  CHANNEL_9105,
+  CHANNEL_9090,
+  CHANNEL_9075,
+  CHANNEL_9060,
+  CHANNEL_9045,
+  CHANNEL_9030,
+  CHANNEL_9015
+}channel_enum_t;
 
 typedef struct{
   uint8_t car_num;
-  uint64_t channel;
+  channel_enum_t channel;
   TickType_t expiry;
 }channel_allocation_t;
 

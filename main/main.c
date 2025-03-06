@@ -51,7 +51,7 @@ void app_main(void){
     int global_time;
     CAN_metadata_t can_metadata;
     uint32_t* LoRa_array;
-    uint32_t LoRa_array_len;
+    uint32_t LoRa_array_len = 0;
     data_value_t** CAN_ID_array;
 
     init_parameters initialization_parameters;

@@ -188,6 +188,10 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
     indices_1Hz = malloc(sizeof(uint32_t) * array_len);
 
     *LoRa_array = malloc(sizeof(uint32_t) * array_len);
+    if (*LoRa_array == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate memory for LoRa_array");
+        return ESP_ERR_NO_MEM;
+    }
 
     *CAN_ID_array = calloc(MAX_CAN_ID_COUNT, sizeof(data_value_t*));
 

@@ -17,12 +17,16 @@ void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* 
 
 esp_err_t serial_send(uint8_t* data, uint16_t length){
     uint32_t* data_array = (uint32_t*)data;
+    //printf("length: %d\n",length);
     length /= 4;
+
     char serial_buffer[SERIAL_BUFFER_LENGTH];
     for(int i = 0; i < paddock_array->num_cars; i++){
         if(data_array[0] == paddock_array->cars[i].car_number){
-            compile_buffer(serial_buffer, paddock_array->cars[i].elements, data_array, length, paddock_array->cars[i].car_number);
+            compile_buffer(serial_buffer, paddock_array->cars[i].elements, data_array, paddock_array->cars[i].array_length, paddock_array->cars[i].car_number);
+            // ESP_LOGI(TAG,"Started print");
             printf("%s", serial_buffer);
+            // ESP_LOGI(TAG,"stopped print");
             break;
         }
     }
@@ -31,11 +35,13 @@ esp_err_t serial_send(uint8_t* data, uint16_t length){
 }
 
 void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* data_array, uint16_t length, uint16_t car_num){
+    printf("length: %d\n",length);
     value_union_t data;
     uint32_t buffer_index = 0;
     buffer_index += snprintf(serial_buffer + buffer_index, SERIAL_BUFFER_LENGTH - buffer_index, "Car Number: %d\n", car_num);
+    //printf("car number buffer index: %ld\n",buffer_index);
     for(int i = 0; i < length; i++){
-        data.u = data_array[i];
+        data.u = data_array[i+1];
         float data_float;
         if(elements[i].type == 'f'){
             data_float = data.f;
@@ -50,7 +56,8 @@ void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* 
         data_float *= elements[i].conversion;
 
         buffer_index += snprintf(serial_buffer + buffer_index, SERIAL_BUFFER_LENGTH - buffer_index, "%s,%s,%.7f\n", elements[i].name, elements[i].unit, data_float);
+        //printf("buffer_index: %ld\n",buffer_index);
     }
-
+    //printf("placing buffer end at: %ld\n",buffer_index);
     serial_buffer[buffer_index] = '\0';
 }

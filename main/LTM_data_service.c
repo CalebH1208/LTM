@@ -29,19 +29,19 @@ esp_err_t data_service_init(car_state_t* state, uint32_t* LoRa_array, uint32_t a
     return ESP_OK;
 }
 
-esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len){
+esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len, int car_num){
     car_element_t * temp_elements_copy = malloc(car_state->data_length * sizeof(car_element_t));
 
     if(temp_elements_copy == NULL){
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGW(TAG, "attempting to take semphore lora data, r: %d  |  w:%d",reader_count, writer_count);
+    //ESP_LOGW(TAG, "attempting to take semphore lora data, r: %d  |  w:%d",reader_count, writer_count);
     if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){
         free(temp_elements_copy);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    ESP_LOGW(TAG, "success lora state, r: %d  |  w:%d",reader_count, writer_count);
+    //ESP_LOGW(TAG, "success lora state, r: %d  |  w:%d",reader_count, writer_count);
     reader_count++;
 
     memcpy(temp_elements_copy, car_state->elements, car_state->data_length * sizeof(car_element_t));
@@ -52,13 +52,16 @@ esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len){
     }
 
     uint32_t * full_val = (uint32_t *)data;
+    full_val[0] = car_num;
 
     for(uint32_t i = 0; i < LoRa_adrr_array_length; i++){
-        full_val[i] = temp_elements_copy[LoRa_adrr_array[i]].data.u;
+        full_val[i+1] = temp_elements_copy[LoRa_adrr_array[i]].data.u;
     }
 
-    *len = sizeof(uint32_t) * LoRa_adrr_array_length;
+    *len = sizeof(uint32_t) * (LoRa_adrr_array_length+1);
 
+    //ESP_LOGW(TAG,"length of data: %d, %ld, %ld, %ld, %ld",*len,full_val[0],full_val[1],full_val[2],full_val[3]);
+    free(temp_elements_copy);
     return ESP_OK;
 }
 

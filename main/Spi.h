@@ -1,8 +1,8 @@
 #ifndef SPI_H
 #define SPI_H
 
-#include "shared.h"
 #include "driver/spi_master.h"
+#include "esp_log.h"
 
 int spi_initialize_device(spi_bus_config_t* config, spi_device_interface_config_t* device,spi_host_device_t host,spi_device_handle_t* handle,void** DMA);
 

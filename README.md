@@ -1,1 +1,1 @@
-LTM Mother fucker
+LTM yay :)

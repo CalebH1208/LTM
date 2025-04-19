@@ -19,6 +19,9 @@ esp_err_t data_logging_init(CAN_metadata_t CAN_data){
     indices_1Hz = CAN_data.indices_1Hz_p;
     length_1Hz = CAN_data.length_1Hz_p;
     ESP_LOGI(TAG,"Data logging init successful");
+
+
+
     return ESP_OK;
 }
 
@@ -79,7 +82,7 @@ void data_logging_ritual(){
             // fflush(fptr_10HZ);
             // fflush(fptr_1HZ);
             // fsync();
-            
+            printf("%ld,%ld,%ld\n",length_100Hz,length_10Hz,length_1Hz);
             fclose(fptr_100HZ);
             fclose(fptr_10HZ);
             fclose(fptr_1HZ);
@@ -120,15 +123,18 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
 
     //if(num_indices >0)ESP_LOGI(TAG,"%c\n",state->elements[0].type);
     for(int i = 0; i < num_indices; i++){
-        if(state->elements[i].type == 'f'){
-            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%.7f", state->elements[indices[i]].data.f);
+
+        
+        if(state->elements[indices[i]].type == 'f'){
+            bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%.7f", (double)(state->elements[indices[i]].data.f));
+            //ESP_LOGI(TAG,"value of float %d: %f and the value as an uint: %lu",i,state->elements[indices[i]].data.f,state->elements[indices[i]].data.u);
             if(bytes_written > 0){
                 buffer_index += bytes_written;
             }else{
                 free(buffer);
                 return NULL;
             }
-        }else if(state->elements[i].type == 'u'){
+        }else if(state->elements[indices[i]].type == 'u'){
             bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%lu", state->elements[indices[i]].data.u);
             if(bytes_written > 0){
                 buffer_index += bytes_written;
@@ -136,7 +142,7 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
                 free(buffer);
                 return NULL;
             }
-        }else if(state->elements[i].type == 'i'){
+        }else if(state->elements[indices[i]].type == 'i'){
             bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%ld", state->elements[indices[i]].data.i);
             if(bytes_written > 0){
                 buffer_index += bytes_written;
@@ -147,10 +153,8 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
         }
         
     }
-    
-    buffer[buffer_index] = '\n';
-    buffer[++buffer_index] = '\0';
-    *str_len = buffer_index+1;
+    buffer[buffer_index++] = '\n';
+    *str_len = buffer_index;
     return buffer;
 }
 

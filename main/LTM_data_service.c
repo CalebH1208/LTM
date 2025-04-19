@@ -80,41 +80,57 @@ car_state_t * data_service_get_car_state(){
         return NULL;
     }
     // ESP_LOGW(TAG, "attempting to take semphore car state, r: %d  |  w:%d",reader_count, writer_count);
-    if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){
-        free(temp_state_copy);
-        ESP_LOGE(TAG, "semaphor timed out");
-        return NULL;
-    }
-    // ESP_LOGW(TAG, "success car state, r: %d  |  w:%d",reader_count, writer_count);
-    reader_count++;
+    // if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){
+    //     free(temp_state_copy);
+    //     ESP_LOGE(TAG, "semaphor timed out");
+    //     return NULL;
+    // }
+    // // ESP_LOGW(TAG, "success car state, r: %d  |  w:%d",reader_count, writer_count);
+    // reader_count++;
 
     temp_state_copy->car_number = car_state->car_number;
     temp_state_copy->data_length = car_state->data_length;
     temp_state_copy->time = car_state->time;
     memcpy(temp_state_copy->elements, car_state->elements, car_state->data_length * sizeof(car_element_t));
 
-    reader_count--;
-    if(0 == reader_count){
-        xSemaphoreGive(read_lock);
-    }
+    // reader_count--;
+    // if(0 == reader_count){
+    //     xSemaphoreGive(read_lock);
+    // }
 
     return temp_state_copy;
 }
 
-esp_err_t data_service_write(uint32_t index, uint32_t data){
-    // ESP_LOGW(TAG, "attempting to take semphore write, r: %d  |  w:%d",reader_count, writer_count);
-    if(data_service_handle_semaphor(read_lock, write_lock) != ESP_OK){
-        return ESP_ERR_INVALID_RESPONSE;
+esp_err_t data_service_write(uint32_t index, uint32_t data, uint8_t len){
+    // // ESP_LOGW(TAG, "attempting to take semphore write, r: %d  |  w:%d",reader_count, writer_count);
+    // if(data_service_handle_semaphor(read_lock, write_lock) != ESP_OK){
+    //     return ESP_ERR_INVALID_RESPONSE;
+    // }
+    // //ESP_LOGW(TAG, "success write, r: %d  |  w:%d",reader_count, writer_count);
+    // writer_count++;
+
+        
+    if(car_state->elements[index].type == 'i'){
+        // ESP_LOGI(TAG,"converting data to int type: %lu also %ld",data, data);
+        // ESP_LOGI(TAG, "if shit: %ld",data >> (len - 1) & 0x01);
+        if(data >> (len - 1) & 0x01){
+            data = data | (0xFFFFFFFF << len);
+            data = ~data;
+            data++;
+            data *= -1;
+        }
+        // ESP_LOGI(TAG, "WHAT A BEAUTIFUL BUTTERFLY: %lu also %ld",data, data);
+        car_state->elements[index].data.u = data;
+        return ESP_OK;
     }
-    //ESP_LOGW(TAG, "success write, r: %d  |  w:%d",reader_count, writer_count);
-    writer_count++;
+
 
     car_state->elements[index].data.u = data;
-
-    writer_count--;
-    if(0 == writer_count){
-        xSemaphoreGive(write_lock);
-    }
+    //ESP_LOGI(TAG,"value of float: %f and the value as an uint: %lu",car_state->elements[index].data.f,car_state->elements[index].data.u);
+    // writer_count--;
+    // if(0 == writer_count){
+    //     xSemaphoreGive(write_lock);
+    // }
 
     return ESP_OK;
 }

@@ -58,7 +58,7 @@ void CAN_ritual(){
             LOOP_AGAIN_MOTHERFUCKER;
         }
         ID = CAN_frame.identifier % MAX_CAN_ID_COUNT;
-        ESP_LOGI(TAG,"the id: %ld",ID);
+        //ESP_LOGI(TAG,"the id: %ld",ID);
         if(NULL == CAN_IDs_list[ID]) LOOP_AGAIN_MOTHERFUCKER;
 
         if(ID == global_time_ID){
@@ -72,17 +72,24 @@ void CAN_ritual(){
 
 void parse_and_store_frame(data_value_t* head, uint8_t* frame){
     uint64_t data_block;
-    
     do{
+        //Reset the data block to zero in order to not overwrite the data_block repeatedly
+        //Caleb and Justin forgot this line at first, and this results in a "nan" being written, bu tonly if a positive and negative float are on the same message
+        //Like 2 hours of just this error
+        data_block = 0;
         for(int i = 7;i>=0;i--){
             data_block |= (uint64_t)frame[i] << 8*(7-i); 
         }
-        ESP_LOGI(TAG,"data: %lld",data_block);
-        ESP_LOGI(TAG,"offset: %d | length: %d",head->offset,head->length);
+        //ESP_LOGI(TAG,"Data block: %llu",data_block);
+        // ESP_LOGI(TAG,"data: %lld",data_block);
+        // ESP_LOGI(TAG,"offset: %d | length: %d",head->offset,head->length);
         data_block = data_block << head->offset;
         data_block = data_block >> (64 - (head->length));
-        ESP_LOGI(TAG,"data: %lld",data_block);
-        data_service_write(head->index,(uint32_t)data_block);
+        // ESP_LOGI(TAG,"data: %lld",data_block);
+        
+        data_service_write(head->index,(uint32_t)data_block,head->length);
+        
+        //ESP_LOGI(TAG,"data: %ld, index: %ld ,  offset: %d",(uint32_t)data_block, head->index,head->offset);
         head = head->next;
     }while(head != NULL);
     return;

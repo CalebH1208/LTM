@@ -13,7 +13,7 @@ esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len, int car_num
 
 car_state_t * data_service_get_car_state();
 
-esp_err_t data_service_write(uint32_t index, uint32_t data);
+esp_err_t data_service_write(uint32_t index, uint32_t data, uint8_t len);
 
 esp_err_t data_service_write_global_time(uint8_t* frame_data);
 

@@ -6,9 +6,7 @@
 #include "LTM_CAN.h"
 #include "LTM_serial_service.h"
 
-bool is_sender = false;
-
-#define PRINT_RUN_STATS 1
+// #define PRINT_RUN_STATS 1
 
 #define LoRaLED 5
 
@@ -33,6 +31,7 @@ bool is_sender = false;
 static const char *TAG = "LTM Main";
 
 void app_main(void){
+    ESP_LOGI(TAG,"Size of %d",sizeof(float));
     /*
     typedef struct {
     valid_CAN_speeds_t* bus_speed;
@@ -128,4 +127,5 @@ void app_main(void){
         printf("%s\n",buffer);
     }
 #endif
+    while(1) {vTaskDelay(pdMS_TO_TICKS(100000));}
 }

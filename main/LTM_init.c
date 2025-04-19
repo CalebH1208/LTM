@@ -5,13 +5,13 @@ init_struct_t* init_structure;
 static const char *TAG = "LTM init";
 
 static uint32_t * indices_100Hz;
-static uint32_t length_100Hz;
+static uint32_t length_100Hz = 0;
 
 static uint32_t * indices_10Hz;
-static uint32_t length_10Hz;
+static uint32_t length_10Hz = 0;
 
 static uint32_t * indices_1Hz;
-static uint32_t length_1Hz;
+static uint32_t length_1Hz = 0;
 
 esp_err_t SD_init(sdmmc_slot_config_t* SD_config){
     const char mountpoint[] = MOUNT_POINT;
@@ -220,6 +220,7 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
         car_state->elements[index].type = (char) type->valueint;
         car_state->elements[index].data.u = 0;
         //ESP_LOGI(TAG,"the frequency: %d",freq->valueint);
+        //printf("%d\n",freq->valueint);
         switch(freq->valueint){
             case(100):
                 indices_100Hz[length_100Hz] = index;
@@ -258,11 +259,13 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
             else{
                 //ESP_LOGW(TAG,"%p  |  %p\n", (void*)(*CAN_ID_array)[(ID % 0x100)],(void*) ((*CAN_ID_array)[(ID % 0x100)])->next); ////////////////////////// delete these
                 // vTaskDelay(pdMS_TO_TICKS(10)); ///////////////////////////////////////// delete this
-                while(((*CAN_ID_array)[(ID % 0x100)])->next != NULL)(*CAN_ID_array)[(ID % 0x100)] = ((*CAN_ID_array)[(ID % 0x100)])->next;
-                ((*CAN_ID_array)[(ID % 0x100)])->next = can_item;
+                data_value_t* temp = ((*CAN_ID_array)[(ID % 0x100)]);
+                while(temp->next != NULL) temp = temp->next;
+                temp->next = can_item;
             }
         }
         index++;
+        //printf("name: %s | bitOffset: %d | bitLength: %d | type: %c | CAN item index: %ld | ID: %d\n", name->valuestring, bitO->valueint, bitL->valueint, type->valueint, can_item->index, ID );
     }
     //ESP_LOGI(TAG,"%d",(*CAN_ID_array)[3]->length);
     can_data->indices_100Hz_p = indices_100Hz;
@@ -273,6 +276,8 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
 
     can_data->indices_1Hz_p = indices_1Hz;
     can_data->length_1Hz_p = length_1Hz;
+
+    ESP_LOGE(TAG, "100len: %ld, 10len: %ld, 1len: %ld", length_100Hz,length_10Hz,length_1Hz);
 
     //// the end of the car side parsing
     return ESP_OK;
@@ -323,7 +328,6 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
         }
     }
     buffer[buffer_index] = '\n';
-    buffer[++buffer_index] = '\0';
     write_data_no_free(buffer,++buffer_index,file);
     buffer_index = 0;
     bytes_written = 0;
@@ -345,7 +349,6 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
         }
     }
     buffer[buffer_index] = '\n';
-    buffer[++buffer_index] = '\0';
     write_data_no_free(buffer,++buffer_index,file);
     buffer_index = 0;
     bytes_written = 0;
@@ -367,7 +370,6 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
         }
     }
     buffer[buffer_index] = '\n';
-    buffer[++buffer_index] = '\0';
     write_data_no_free(buffer,++buffer_index,file);
     buffer_index = 0;
     bytes_written = 0;
@@ -389,9 +391,6 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
         }
     }
     buffer[buffer_index] = '\n';
-    buffer[++buffer_index] = '\0';
     write_data(buffer,++buffer_index,file);
-    buffer_index = 0;
-    bytes_written = 0;
     return ESP_OK;
 }

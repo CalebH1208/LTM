@@ -52,17 +52,7 @@ void app_main(void){
     uint32_t* LoRa_array;
     uint32_t LoRa_array_len = 0;
     data_value_t** CAN_ID_array;
-
-    init_parameters initialization_parameters;
-    initialization_parameters.LTM_type = &LTM_type;
-    initialization_parameters.bus_speed = &CAN_speed;
-    initialization_parameters.car_state = &car_state;
-    initialization_parameters.paddock_array = &paddock_array;
-    initialization_parameters.global_time_id = &global_time;
-    initialization_parameters.can_data = &can_metadata;
-    initialization_parameters.LoRa_array = &LoRa_array;
-    initialization_parameters.LoRa_array_length = &LoRa_array_len;
-    initialization_parameters.CAN_ID_array = &CAN_ID_array;
+    uint64_t channels[10];
 
     spi_config_t spi ={
         .miso = MISO,
@@ -79,8 +69,21 @@ void app_main(void){
         .CR = LoRa_CR_4_5,
         .SF = LoRa_SF_7,
         .DIO0 = DIO0PIN,
-        .frequency = LORA_DEFAULT_FREQUENCY,
+        .frequency = 915000000,
     };
+
+    init_parameters initialization_parameters;
+    initialization_parameters.LTM_type = &LTM_type;
+    initialization_parameters.bus_speed = &CAN_speed;
+    initialization_parameters.car_state = &car_state;
+    initialization_parameters.paddock_array = &paddock_array;
+    initialization_parameters.global_time_id = &global_time;
+    initialization_parameters.can_data = &can_metadata;
+    initialization_parameters.LoRa_array = &LoRa_array;
+    initialization_parameters.LoRa_array_length = &LoRa_array_len;
+    initialization_parameters.CAN_ID_array = &CAN_ID_array;
+    initialization_parameters.LoRa_freq = &(LoRa.frequency);
+    initialization_parameters.LoRa_channels = channels;
 
     sdmmc_slot_config_t SD = SDMMC_SLOT_CONFIG_DEFAULT();
     SD.width = SD_BUS_WIDTH;
@@ -100,18 +103,18 @@ void app_main(void){
         ESP_ERROR_CHECK(data_service_init(&car_state, LoRa_array,LoRa_array_len));
         ESP_ERROR_CHECK(CAN_init((gpio_num_t)CANTX, (gpio_num_t)CANRX, CAN_speed, CAN_ID_array,global_time));
         ESP_ERROR_CHECK(data_logging_init(can_metadata));
-        ESP_ERROR_CHECK(LoRa_Init(&spi,&LoRa,car_state.car_number));
+        ESP_ERROR_CHECK(LoRa_Init(&spi,&LoRa,car_state.car_number,channels));
         ESP_LOGI(TAG, "inits ran");
 
         xTaskCreatePinnedToCore(CAN_ritual,"CAN ritual",4096,NULL,2,NULL,0);
         xTaskCreatePinnedToCore(data_logging_ritual,"Datalogging ritual",16384,NULL,1,NULL,1);
-        xTaskCreatePinnedToCore(LoRa_ritual,"LoRa ritual",8192,NULL,2,NULL,0);
+        xTaskCreatePinnedToCore(LoRa_car_ritual,"LoRa ritual",8192,NULL,2,NULL,0);
         ESP_LOGI(TAG, "rituals ran");
     }
     else{
         ESP_LOGI(TAG,"THIS IS THE PADDOCK SIDE ESP");
         ESP_ERROR_CHECK(serial_service_init(&paddock_array));
-        ESP_ERROR_CHECK(LoRa_Init(&spi,&LoRa,0));
+        ESP_ERROR_CHECK(LoRa_Init(&spi,&LoRa,0,channels));
         ESP_LOGI(TAG, "inits ran");
 
         xTaskCreate(LoRa_paddock_ritual, "LoRa Ritual", 16384, NULL, 2, NULL);

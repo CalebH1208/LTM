@@ -9,7 +9,7 @@
 
 #define CHECK_IN_FREQ 915000000
 
-#define SEND_FREQUENCY 7.5
+#define SEND_FREQUENCY 50
 
 #define SEND_CHANNEL_REQUEST_PERIOD 100
 
@@ -27,24 +27,6 @@
 
 #define TICKS_TILL_CHANNEL_EXPIRE TICKS_TILL_NEXT_ASSIGNMENT
 
-typedef enum{
-  CHANNEL_9150,
-  CHANNEL_9135,
-  CHANNEL_9120,
-  CHANNEL_9105,
-  CHANNEL_9090,
-  CHANNEL_9075,
-  CHANNEL_9060,
-  CHANNEL_9045,
-  CHANNEL_9030,
-  CHANNEL_9015
-}channel_enum_t;
-
-typedef struct{
-  uint8_t car_num;
-  channel_enum_t channel;
-  TickType_t expiry;
-}channel_allocation_t;
 
 typedef struct {
     int mosi;
@@ -64,17 +46,13 @@ typedef struct {
     gpio_num_t Activity_LED;
   }LoRa_config_t;
 
-int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig,uint32_t car_num);
+int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig,uint32_t car_num, uint64_t* chan);
 
 int LoRa_Tx(uint8_t* data, int length);
 
-int LoRa_get_assigned_channel();
-
-void LoRa_ritual();
+void LoRa_car_ritual();
 
 void LoRa_paddock_ritual();
-
-void LoRa_car_rx_callback(LoRaModule* chip ,uint8_t* data,uint16_t length);
 
 void LoRa_paddock_rx_callback(LoRaModule* chip ,uint8_t* data, uint16_t length);
 

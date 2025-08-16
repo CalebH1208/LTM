@@ -6,7 +6,8 @@
         "string": "c",
         "string_view": "c",
         "ranges": "c",
-        "span": "c"
+        "span": "c",
+        "ltm_data_service.h": "c"
     },
     "idf.flashType": "UART"
 }

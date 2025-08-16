@@ -85,6 +85,15 @@ esp_err_t parse_JSON_globals(init_parameters params){
 
 esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     paddock_array_t* paddock_array = params.paddock_array;
+    uint64_t* channels = params.LoRa_channels;
+
+    int channel_index = 0;
+
+    cJSON* lap_timer_frequency = cJSON_GetObjectItemCaseSensitive(root,"LTF");
+    if(lap_timer_frequency->valueint != 0){
+        channels[channel_index] = lap_timer_frequency->valueint;
+        channel_index++;
+    }
 
     cJSON* JSON_paddock_array = cJSON_GetObjectItemCaseSensitive(root,"CARS");
     uint32_t array_len = cJSON_GetArraySize(JSON_paddock_array);
@@ -98,6 +107,12 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
         paddock_state_array[index].car_number = cJSON_car_num->valueint;
         cJSON* car_data_array = cJSON_GetObjectItemCaseSensitive(car_iterable,"ITEMS");
         paddock_state_array[index].array_length = cJSON_GetArraySize(car_data_array);
+
+        cJSON* LoRa_frequency = cJSON_GetObjectItemCaseSensitive(car_iterable,"LF");
+        if(LoRa_frequency->valueint != 0){
+            channels[channel_index] = LoRa_frequency->valueint;
+            channel_index++;
+        }
 
         paddock_state_array[index].elements = malloc(sizeof(paddock_element_t) * paddock_state_array[index].array_length);
         if(NULL == paddock_state_array[index].elements){
@@ -140,6 +155,7 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
     uint32_t** LoRa_array = params.LoRa_array;
     uint32_t* LoRa_array_length = params.LoRa_array_length;
     data_value_t*** CAN_ID_array = params.CAN_ID_array;
+    uint64_t* LoRa_freq = params.LoRa_freq;
 
     cJSON* JSON_bus_speed = cJSON_GetObjectItemCaseSensitive(root,"BS");
     if (!cJSON_IsNumber(JSON_bus_speed)){
@@ -168,13 +184,15 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
 
     cJSON* car_num = cJSON_GetObjectItemCaseSensitive(root, "CN");
     cJSON* GID = cJSON_GetObjectItemCaseSensitive(root, "GID");
+    cJSON* freq = cJSON_GetObjectItemCaseSensitive(root, "LF");
 
-    if(!cJSON_IsNumber(car_num) || !cJSON_IsNumber(GID)){
+    if(!cJSON_IsNumber(car_num) || !cJSON_IsNumber(GID) || !cJSON_IsNumber(freq)){
         ESP_LOGE(TAG,"Invalid config");
         return ESP_ERR_NOT_FINISHED;
     }
     car_state->car_number = car_num->valueint;
     *global_time_id = GID->valueint;
+    *LoRa_freq = freq->valueint;
     ////////////////////////////////////////////////////// maybe exit here and use parse JSON can but for now its here feel free to seperate it justin
     cJSON* CAN_items = cJSON_GetObjectItemCaseSensitive(root,"CAN");
 

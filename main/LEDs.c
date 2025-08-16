@@ -14,6 +14,13 @@ void LED_off(int gpio)
     gpio_set_level(gpio, 0);
 }
 
+void LED_delayed_off(void * params){
+    int delayMS = ((delay_parameters *)params)->delayMS;
+    int gpio = ((delay_parameters *)params)->gpio;
+    vTaskDelay(pdMS_TO_TICKS(delayMS));
+    gpio_set_level(gpio,0);
+}
+
 void configure_led(int gpio)
 {
     ESP_LOGI(TAG, "LED on GPIO %d configured",gpio);

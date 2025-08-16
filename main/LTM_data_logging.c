@@ -78,11 +78,6 @@ void data_logging_ritual(){
             csv_string = parse_data_string(indices_1Hz, length_1Hz, state, &str_len, up_time_ms);
             write_data(csv_string, str_len, fptr_1HZ);
 
-            //fflush(fptr_100HZ);
-            // fflush(fptr_10HZ);
-            // fflush(fptr_1HZ);
-            // fsync();
-            printf("%ld,%ld,%ld\n",length_100Hz,length_10Hz,length_1Hz);
             fclose(fptr_100HZ);
             fclose(fptr_10HZ);
             fclose(fptr_1HZ);

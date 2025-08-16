@@ -33,6 +33,8 @@ typedef struct {
     uint32_t** LoRa_array;
     uint32_t* LoRa_array_length;
     data_value_t*** CAN_ID_array;
+    uint64_t* LoRa_freq;
+    uint64_t* LoRa_channels;
 }init_parameters;
 
 typedef struct init_structure{

@@ -12,14 +12,15 @@ uint64_t channel = 0;
 
 int car_num = -1;
 
-channel_allocation_t channels[NUMBER_OF_CHANNELS];
+uint64_t* channels;
 
 static SemaphoreHandle_t rx_signal;
 StaticSemaphore_t rx_signal_buffer;
 
-int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig, uint32_t car){
+int LoRa_Init(spi_config_t* spiConfig, LoRa_config_t* LoRaConfig, uint32_t car, uint64_t* chan){
     car_num = car;
-
+    channels = chan;
+    channel =  LoRaConfig->frequency;
     LoRa = LoRa_initialize(spiConfig->mosi,spiConfig->miso,spiConfig->clk,spiConfig->nss,spiConfig->clockspeed,spiConfig->host,&spi,NULL);
     ESP_ERROR_CHECK(LoRa_set_mode(LoRa_MODE_SLEEP, LoRa));
     ESP_ERROR_CHECK(LoRa_set_frequency(LoRaConfig->frequency,LoRa));
@@ -48,18 +49,23 @@ int LoRa_Tx(uint8_t* data, int length){
     LED_on(LoRa->Activity_LED);
     ESP_ERROR_CHECK(LoRa_tx_set_for_transmission(data, length*8, LoRa));
     ESP_ERROR_CHECK(LoRa_set_mode(LoRa_MODE_TX, LoRa));
-    LED_off(LoRa->Activity_LED);
+    // delay_parameters delay = {
+    //     .gpio = LoRa->Activity_LED,
+    //     .delayMS = 10
+    // };
+    // xTaskCreate(LED_delayed_off,"LoRa_LED_off",512,(void*)&delay,1,NULL);
+    //LED_off(LoRa->Activity_LED);
     return ESP_OK;
 }
 
-void LoRa_ritual(){
-    TickType_t last_assignment = xTaskGetTickCount();
+void LoRa_car_ritual(){
     TickType_t curr_ticks;
-    LoRa_rx_set_callback(LoRa_car_rx_callback,LoRa);
-    ESP_ERROR_CHECK(setup_rx_task(LoRa));
-    LoRa_swap_channel(CHECK_IN_FREQ);
     while(1){ //lol
+        if(channel < 900000000 || channel > 915000000){
+            LOOP_AGAIN_MOTHERFUCKER;
+        }
         curr_ticks = xTaskGetTickCount();
+        
         //printf("%ld | %ld | %d\n",curr_ticks , last_assignment, (curr_ticks - last_assignment) > TICKS_TILL_NEXT_ASSIGNMENT);
         // if((curr_ticks - last_assignment) > TICKS_TILL_NEXT_ASSIGNMENT || 0 == channel){
         //     channel = 0;
@@ -75,46 +81,10 @@ void LoRa_ritual(){
     }
 }
 
-int LoRa_get_assigned_channel(){
-    if(car_num < 1){
-        return ESP_ERR_INVALID_STATE;
-    }
-    while(0 == channel){
-        LoRa_swap_channel(CHECK_IN_FREQ);
-        LoRa_Tx((uint8_t *)&car_num,sizeof(int));
-        //ESP_LOGI(TAG,"car num sent: %d",car_num);
-        ESP_ERROR_CHECK(LoRa_set_mode(LoRa_MODE_RX_CONT,LoRa));
-        vTaskDelay(pdMS_TO_TICKS(SEND_CHANNEL_REQUEST_PERIOD)); // maybe decrease this?
-    }
-    LoRa_swap_channel(channel);
-    return ESP_OK;
-}
-
-void LoRa_car_rx_callback(LoRaModule* chip, uint8_t* data, uint16_t length){
-    LED_on(LoRa->Activity_LED);
-    int recieved_car_num = -1;
-    uint64_t temp_freq = 0;
-    for(int i = sizeof(int)-1; i >= 0 && i < length; i--){
-        recieved_car_num = recieved_car_num << 8 | data[i];
-    }
-    //printf("%d\n",recieved_car_num);
-    if(recieved_car_num != car_num)return;
-    for(int i = 2*sizeof(int) - 1; i >= sizeof(int) && i < length; i--){
-        temp_freq = temp_freq << 8 | data[i];
-    }
-    temp_freq = CHECK_IN_FREQ - (temp_freq * CHANNEL_STEP);
-    ESP_LOGI(TAG,"frequency recieved: %lld",temp_freq);
-    if(temp_freq < CHECK_IN_FREQ - (CHANNEL_STEP*NUMBER_OF_CHANNELS) || temp_freq > CHECK_IN_FREQ) return;
-    channel = temp_freq;
-    ESP_LOGI(TAG,"frequency set to %llu",channel);
-    LED_off(LoRa->Activity_LED);
-}
-
 int LoRa_swap_channel(uint64_t frequency){
     esp_err_t err = LoRa_set_mode(LoRa_MODE_SLEEP,LoRa);
     if(err != ESP_OK)return err;
     err = LoRa_set_frequency(frequency,LoRa);
-    //printf("%d\n",err);
     return err;
 }
 
@@ -122,75 +92,26 @@ void LoRa_paddock_ritual(){
     rx_signal = xSemaphoreCreateBinaryStatic(&rx_signal_buffer);
     LoRa_rx_set_callback(LoRa_paddock_rx_callback,LoRa);
     ESP_ERROR_CHECK(setup_rx_task(LoRa));
-    for(int i = 1; i < NUMBER_OF_CHANNELS; i++){ // fun for loop :)
-        channels[i].channel = i;
-        channels[i].car_num = 0;
-        channels[i].expiry = 0;
-    }
-    LoRa_swap_channel(CHECK_IN_FREQ);
+    LoRa_swap_channel(channels[0]);
     LoRa_set_mode(LoRa_MODE_RX_CONT, LoRa);
-    TickType_t curr_ticks;
+    int channel_index = 0;
     while(1){
-    //     curr_ticks = xTaskGetTickCount();
-    //     serial_clear_on_next_printf(true);
-    //     for(int i = 1; i < NUMBER_OF_CHANNELS;i++){
-    //         //printf("%ld ,%ld, %d, i=%d\n",channels[i].expiry , curr_ticks, channels[i].expiry > curr_ticks,i);
-    //         if(channels[i].expiry > curr_ticks){
-    //             LoRa_swap_channel(CHECK_IN_FREQ - ((uint64_t)channels[i].channel * CHANNEL_STEP));
-    //             channel = 1;
-    //             xSemaphoreTake(rx_signal,0);
-    //             LoRa_set_mode(LoRa_MODE_RX_CONT, LoRa); // might need to be CONT mode if the chip has short rx single wait period
-    //             xSemaphoreTake(rx_signal,pdMS_TO_TICKS(CHANNEL_WAIT_TIME_MS));
-    //         }
-    //     }
-    //     channel = 0;
-    //     LoRa_swap_channel(CHECK_IN_FREQ);
-    //     LoRa_set_mode(LoRa_MODE_RX_CONT, LoRa);
-    //     vTaskDelay(pdMS_TO_TICKS(CHECK_IN_WAIT_TIME_MS)); // try making this smaller later :)
-        serial_clear_on_next_printf(true);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        //ESP_LOGI(TAG, "Swapping channels to: %lld, %d", channels[channel_index], channel_index);
+        LoRa_swap_channel(channels[channel_index]);
+        LoRa_set_mode(LoRa_MODE_RX_CONT, LoRa);
+        xSemaphoreTake(rx_signal,pdMS_TO_TICKS(500));
+        channel_index++;
+        if(channels[channel_index] == 0){
+            channel_index = 0;
+        }
+        
+        // add the hopping bullshit here for reception
     }
 }
 
 void LoRa_paddock_rx_callback(LoRaModule* chip ,uint8_t* data, uint16_t length){
     LED_on(LoRa->Activity_LED);
-    // if(0 != channel){
-        //printf("trying to print sent data: %d\n",length);
     xSemaphoreGive(rx_signal);
     serial_send(data, length);
-    // }
-    // else{
-    //     //printf("trying to give out a channel\n");
-    //     int recieved_car_num = -1;
-    //     for(int i = sizeof(int)-1; i >= 0 && i < length; i--){
-    //         recieved_car_num = recieved_car_num << 8 | data[i];
-    //     }
-    //     TickType_t curr_ticks = xTaskGetTickCount();
-    //     channel_enum_t frequency = 0;
-    //     bool found = false;
-    //     for(int i = 1; i < NUMBER_OF_CHANNELS;i++){
-    //         if(channels[i].car_num == recieved_car_num ){
-    //             frequency = channels[i].channel;
-    //             channels[i].car_num = recieved_car_num;
-    //             channels[i].expiry = curr_ticks + TICKS_TILL_CHANNEL_EXPIRE;
-    //             found = true;
-    //             break;
-    //         }
-    //     }
-    //     if(!found){
-    //         for(int i = 1; i< NUMBER_OF_CHANNELS;i++){
-    //             if(curr_ticks > channels[i].expiry ){
-    //                 frequency = channels[i].channel;
-    //                 channels[i].car_num = recieved_car_num;
-    //                 channels[i].expiry = curr_ticks + TICKS_TILL_CHANNEL_EXPIRE;
-    //                 break;
-    //             }
-    //         }
-    //     }    
-    //     if(0 == frequency)return;
-    //     ESP_LOGI(TAG,"here is the num: %d | and the freq: %d",recieved_car_num,frequency);
-    //     uint32_t data[2] = {recieved_car_num, frequency};
-    //     LoRa_Tx((uint8_t*)data,2*sizeof(uint32_t));
-    // }
     LED_off(LoRa->Activity_LED);
 }

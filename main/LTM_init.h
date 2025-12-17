@@ -11,7 +11,7 @@
 #include "shared.h"
 
 #include "LTM_data_logging.h"
-#include "LTM_LoRa.h"
+#include "LTM_espnow.h"
 #include "LTM_CAN.h"
 #include "LTM_data_service.h"
 
@@ -33,8 +33,10 @@ typedef struct {
     uint32_t** LoRa_array;
     uint32_t* LoRa_array_length;
     data_value_t*** CAN_ID_array;
-    uint64_t* LoRa_freq;
-    uint64_t* LoRa_channels;
+    uint8_t* espnow_channel;          // WiFi channel (WC in JSON)
+    uint8_t (*espnow_peer_macs)[6];   // Array of peer MAC addresses
+    uint8_t* espnow_peer_count;       // Number of peers
+    bool* espnow_long_range;          // Long Range mode enable (LR in JSON)
 }init_parameters;
 
 typedef struct init_structure{

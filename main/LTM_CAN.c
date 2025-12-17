@@ -48,17 +48,17 @@ esp_err_t CAN_init(gpio_num_t CAN_tx, gpio_num_t CAN_rx, valid_CAN_speeds_t bus_
 void CAN_ritual(){
     twai_message_t CAN_frame;
 
-    uint32_t ID;
+    uint32_t ID = -7;
 
     while(1){
         CAN_frame.identifier = 0x00;
-
+        ESP_LOGI(TAG,"the id: %ld",ID);
         if(twai_receive(&CAN_frame,pdMS_TO_TICKS(1000)) != ESP_OK){ 
             //SP_LOGE(TAG,"No CAN was recieved looping again");
             LOOP_AGAIN_MOTHERFUCKER;
         }
         ID = CAN_frame.identifier % MAX_CAN_ID_COUNT;
-        //ESP_LOGI(TAG,"the id: %ld",ID);
+        ESP_LOGI(TAG,"the id: %ld",ID);
         if(NULL == CAN_IDs_list[ID]) LOOP_AGAIN_MOTHERFUCKER;
 
         if(ID == global_time_ID){

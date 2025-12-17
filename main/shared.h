@@ -11,6 +11,9 @@
 #include "sdkconfig.h"
 #include "LEDs.h"
 #include "cJSON.h"
+#include "esp_wifi.h"
+#include "esp_now.h"
+#include "nvs_flash.h"
 
 #define MOUNT_POINT "/sd_card"
 

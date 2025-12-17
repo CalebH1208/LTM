@@ -85,14 +85,24 @@ esp_err_t parse_JSON_globals(init_parameters params){
 
 esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     paddock_array_t* paddock_array = params.paddock_array;
-    uint64_t* channels = params.LoRa_channels;
+    uint8_t* espnow_channel = params.espnow_channel;
+    uint8_t (*espnow_peer_macs)[6] = params.espnow_peer_macs;
+    uint8_t* espnow_peer_count = params.espnow_peer_count;
+    bool* espnow_long_range = params.espnow_long_range;
 
-    int channel_index = 0;
+    // Parse global WiFi channel
+    cJSON* wc = cJSON_GetObjectItemCaseSensitive(root, "WC");
+    if (wc != NULL && cJSON_IsNumber(wc)) {
+        *espnow_channel = (uint8_t)wc->valueint;
+        if (*espnow_channel < 1 || *espnow_channel > 13) {
+            *espnow_channel = 11;  // Default to channel 11
+        }
+    }
 
-    cJSON* lap_timer_frequency = cJSON_GetObjectItemCaseSensitive(root,"LTF");
-    if(lap_timer_frequency->valueint != 0){
-        channels[channel_index] = lap_timer_frequency->valueint;
-        channel_index++;
+    // Parse Long Range mode
+    cJSON* lr = cJSON_GetObjectItemCaseSensitive(root, "LR");
+    if (lr != NULL && cJSON_IsNumber(lr)) {
+        *espnow_long_range = (lr->valueint != 0);
     }
 
     cJSON* JSON_paddock_array = cJSON_GetObjectItemCaseSensitive(root,"CARS");
@@ -101,17 +111,27 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     if(NULL == paddock_state_array) return ESP_ERR_NO_MEM;
 
     cJSON* car_iterable;
-    int index =0;
+    int index = 0;
+    uint8_t peer_index = 0;
     cJSON_ArrayForEach(car_iterable,JSON_paddock_array){
         cJSON* cJSON_car_num = cJSON_GetObjectItemCaseSensitive(car_iterable,"CN");
         paddock_state_array[index].car_number = cJSON_car_num->valueint;
         cJSON* car_data_array = cJSON_GetObjectItemCaseSensitive(car_iterable,"ITEMS");
         paddock_state_array[index].array_length = cJSON_GetArraySize(car_data_array);
 
-        cJSON* LoRa_frequency = cJSON_GetObjectItemCaseSensitive(car_iterable,"LF");
-        if(LoRa_frequency->valueint != 0){
-            channels[channel_index] = LoRa_frequency->valueint;
-            channel_index++;
+        // Parse Car MAC address (CM field, format: "AA:BB:CC:DD:EE:FF")
+        cJSON* car_mac = cJSON_GetObjectItemCaseSensitive(car_iterable,"CM");
+        if (car_mac != NULL && cJSON_IsString(car_mac) && peer_index < 20) {
+            sscanf(car_mac->valuestring, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+                   &espnow_peer_macs[peer_index][0], &espnow_peer_macs[peer_index][1],
+                   &espnow_peer_macs[peer_index][2], &espnow_peer_macs[peer_index][3],
+                   &espnow_peer_macs[peer_index][4], &espnow_peer_macs[peer_index][5]);
+            peer_index++;
+            ESP_LOGI(TAG, "PADDOCK mode: Car#%d MAC = %02X:%02X:%02X:%02X:%02X:%02X",
+                     cJSON_car_num->valueint,
+                     espnow_peer_macs[peer_index-1][0], espnow_peer_macs[peer_index-1][1],
+                     espnow_peer_macs[peer_index-1][2], espnow_peer_macs[peer_index-1][3],
+                     espnow_peer_macs[peer_index-1][4], espnow_peer_macs[peer_index-1][5]);
         }
 
         paddock_state_array[index].elements = malloc(sizeof(paddock_element_t) * paddock_state_array[index].array_length);
@@ -142,12 +162,16 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
 
     paddock_array->cars = paddock_state_array;
     paddock_array->num_cars = array_len;
+    *espnow_peer_count = peer_index;  // Set total number of car peers
+
+    ESP_LOGI(TAG, "ESP-NOW config: Channel=%d, LongRange=%d, Cars=%d",
+             *espnow_channel, *espnow_long_range, *espnow_peer_count);
 
     return ESP_OK;
 }
 
 esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
-    //// below is all of the car side parsing 
+    //// below is all of the car side parsing
     valid_CAN_speeds_t* bus_speed = params.bus_speed;
     car_state_t* car_state = params.car_state;
     int* global_time_id = params.global_time_id;
@@ -155,7 +179,10 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
     uint32_t** LoRa_array = params.LoRa_array;
     uint32_t* LoRa_array_length = params.LoRa_array_length;
     data_value_t*** CAN_ID_array = params.CAN_ID_array;
-    uint64_t* LoRa_freq = params.LoRa_freq;
+    uint8_t* espnow_channel = params.espnow_channel;
+    uint8_t (*espnow_peer_macs)[6] = params.espnow_peer_macs;
+    uint8_t* espnow_peer_count = params.espnow_peer_count;
+    bool* espnow_long_range = params.espnow_long_range;
 
     cJSON* JSON_bus_speed = cJSON_GetObjectItemCaseSensitive(root,"BS");
     if (!cJSON_IsNumber(JSON_bus_speed)){
@@ -184,15 +211,51 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
 
     cJSON* car_num = cJSON_GetObjectItemCaseSensitive(root, "CN");
     cJSON* GID = cJSON_GetObjectItemCaseSensitive(root, "GID");
-    cJSON* freq = cJSON_GetObjectItemCaseSensitive(root, "LF");
+    cJSON* wc = cJSON_GetObjectItemCaseSensitive(root, "WC");           // WiFi Channel
+    cJSON* pm = cJSON_GetObjectItemCaseSensitive(root, "PM");           // Paddock MAC
+    cJSON* lr = cJSON_GetObjectItemCaseSensitive(root, "LR");           // Long Range mode
 
-    if(!cJSON_IsNumber(car_num) || !cJSON_IsNumber(GID) || !cJSON_IsNumber(freq)){
-        ESP_LOGE(TAG,"Invalid config");
+    if(!cJSON_IsNumber(car_num) || !cJSON_IsNumber(GID) || !cJSON_IsNumber(wc)){
+        ESP_LOGE(TAG,"Invalid config - missing required fields");
         return ESP_ERR_NOT_FINISHED;
     }
     car_state->car_number = car_num->valueint;
     *global_time_id = GID->valueint;
-    *LoRa_freq = freq->valueint;
+
+    // ESP-NOW configuration
+    *espnow_channel = (uint8_t)wc->valueint;
+    if (*espnow_channel < 1 || *espnow_channel > 13) {
+        *espnow_channel = 11;  // Default to channel 11
+    }
+
+    // Parse Paddock MAC address (format: "AA:BB:CC:DD:EE:FF")
+    if (pm != NULL && cJSON_IsString(pm)) {
+        int parsed = sscanf(pm->valuestring, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+               &espnow_peer_macs[0][0], &espnow_peer_macs[0][1], &espnow_peer_macs[0][2],
+               &espnow_peer_macs[0][3], &espnow_peer_macs[0][4], &espnow_peer_macs[0][5]);
+        if (parsed == 6) {
+            *espnow_peer_count = 1;
+            ESP_LOGI(TAG, "CAR mode: Paddock MAC parsed = %02X:%02X:%02X:%02X:%02X:%02X (config: %s)",
+                     espnow_peer_macs[0][0], espnow_peer_macs[0][1], espnow_peer_macs[0][2],
+                     espnow_peer_macs[0][3], espnow_peer_macs[0][4], espnow_peer_macs[0][5],
+                     pm->valuestring);
+        } else {
+            ESP_LOGE(TAG, "ERROR: Failed to parse Paddock MAC (PM) - expected 6 values, got %d. Config: %s",
+                     parsed, pm->valuestring);
+            *espnow_peer_count = 0;
+        }
+    } else {
+        ESP_LOGW(TAG, "Warning: No Paddock MAC (PM) found in config");
+        *espnow_peer_count = 0;
+    }
+
+    // Parse Long Range mode
+    if (lr != NULL && cJSON_IsNumber(lr)) {
+        *espnow_long_range = (lr->valueint != 0);
+    }
+
+    ESP_LOGI(TAG, "ESP-NOW config: Channel=%d, LongRange=%d, Car#=%ld",
+             *espnow_channel, *espnow_long_range, car_state->car_number);
     ////////////////////////////////////////////////////// maybe exit here and use parse JSON can but for now its here feel free to seperate it justin
     cJSON* CAN_items = cJSON_GetObjectItemCaseSensitive(root,"CAN");
 

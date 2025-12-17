@@ -245,7 +245,7 @@ esp_err_t parse_JSON_globals_car(init_parameters params, cJSON* root){
                 length_100Hz++;
                 break;
             case(10):
-                    indices_10Hz[length_10Hz] = index;
+                indices_10Hz[length_10Hz] = index;
                 length_10Hz++;
                 break;
             case(1):

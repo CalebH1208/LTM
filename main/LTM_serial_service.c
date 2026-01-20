@@ -1,4 +1,6 @@
 #include "LTM_serial_service.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "Serial_Service";
 
@@ -29,7 +31,7 @@ esp_err_t serial_send(uint8_t* data, uint16_t length){
     if(clear_on_next_printf){
         printf("\n\n");
         serial_clear_on_next_printf(false);
-    
+
 
         char serial_buffer[SERIAL_BUFFER_LENGTH];
         for(int i = 0; i < paddock_array->num_cars; i++){
@@ -46,7 +48,11 @@ esp_err_t serial_send(uint8_t* data, uint16_t length){
             snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d:%d.%d\n|",data[5],data[6],data[7], (data[8] << 8) | data[9]);
             printf("%s",serial_buffer);
         }
-    }    
+
+        // Yield after printf to allow IDLE task to run and reset watchdog
+        // This prevents watchdog timeouts when printf blocks for extended periods
+        taskYIELD();
+    }
 
     return ESP_OK;
 }

@@ -375,6 +375,10 @@ int espnow_remove_peer(const uint8_t *peer_mac) {
 void espnow_car_ritual(void* params) {
     (void)params;
 
+    // Subscribe this task to the watchdog timer for extra safety
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));  // NULL = current task
+    ESP_LOGI(TAG, "CAR ritual subscribed to watchdog");
+
     TickType_t curr_ticks;
     static uint32_t send_count = 0;
     static uint32_t send_success = 0;
@@ -382,6 +386,9 @@ void espnow_car_ritual(void* params) {
     static uint32_t zero_data_count = 0;
 
     while (1) {
+        // Reset watchdog timer
+        esp_task_wdt_reset();
+
         curr_ticks = xTaskGetTickCount();
 
         // Get telemetry data from data service
@@ -443,29 +450,44 @@ void espnow_paddock_ritual(void* params) {
 
     ESP_LOGI(TAG, "PADDOCK mode active, processing telemetry...");
 
+    // Subscribe this task to the watchdog timer to prevent timeout during long printf operations
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));  // NULL = current task
+    ESP_LOGI(TAG, "PADDOCK ritual subscribed to watchdog");
+
     espnow_rx_packet_t rx_pkt;
+    uint32_t packets_processed = 0;
 
     // In PADDOCK mode, the receive callbacks queue data (fast, non-blocking)
     // This task processes the queue and sends to serial (can block)
     while (1) {
+        // Reset watchdog timer to prevent timeout
+        esp_task_wdt_reset();
+
         // Try to get a packet from queue with timeout
         if (xQueueReceive(rx_queue, &rx_pkt, pdMS_TO_TICKS(100)) == pdTRUE) {
             // Process the packet: send to serial
-            // This can block without affecting WiFi reception
+            // This can block, so we feed the watchdog before and after
             serial_send(rx_pkt.data, rx_pkt.length);
+            packets_processed++;
+
+            // Feed watchdog again after potentially long printf operation
+            esp_task_wdt_reset();
+
+            // Yield to allow IDLE task to run (critical for watchdog)
+            taskYIELD();
         } else {
             // Queue empty - log statistics periodically
             static uint32_t last_count = 0;
             if (rx_packet_count > last_count && rx_packet_count % 500 == 0) {
-                ESP_LOGI(TAG, "PADDOCK RX Stats: packets=%lu, zero_data=%lu (%.1f%%)",
+                ESP_LOGI(TAG, "PADDOCK RX Stats: packets=%lu, zero_data=%lu (%.1f%%), processed=%lu",
                          rx_packet_count, rx_zero_data_count,
-                         (float)rx_zero_data_count*100.0f/(float)rx_packet_count);
+                         (float)rx_zero_data_count*100.0f/(float)rx_packet_count,
+                         packets_processed);
                 last_count = rx_packet_count;
             }
-        }
 
-        // Task yields in both paths:
-        // - When processing: serial_send() blocks/yields
-        // - When idle: xQueueReceive() with 100ms timeout yields
+            // Yield to IDLE task during idle periods
+            taskYIELD();
+        }
     }
 }

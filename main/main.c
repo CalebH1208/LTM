@@ -67,6 +67,20 @@ void app_main(void){
     ESP_ERROR_CHECK(SD_init(&SD));
     ESP_ERROR_CHECK(parse_JSON_globals(initialization_parameters));
 
+    // Configure watchdog timer with extended timeout for long printf operations
+    // Default is 5 seconds, increase to 15 seconds to prevent timeout during serial output
+    ESP_LOGI(TAG, "Configuring task watchdog timer (15 second timeout)");
+    ESP_ERROR_CHECK(esp_task_wdt_deinit());  // Deinit default watchdog first
+
+    // Configure watchdog with 15 second timeout (ESP-IDF v5.4 API)
+    esp_task_wdt_config_t wdt_config = {
+            .timeout_ms = 150000,           
+        .idle_core_mask = (1 << 0) | (1 << 1),  // Monitor both CPU cores
+        .trigger_panic = false          // Panic on timeout
+    };
+    ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_config));
+    ESP_LOGI(TAG, "Task watchdog configured: 15s timeout, monitoring IDLE tasks on both cores");
+
     if(LTM_type == CAR){
         ESP_LOGI(TAG,"THIS IS A CAR SIDE ESP");
         ESP_ERROR_CHECK(write_header());
@@ -81,7 +95,7 @@ void app_main(void){
 
         xTaskCreatePinnedToCore(CAN_ritual,"CAN ritual",4096,NULL,2,NULL,0);
         xTaskCreatePinnedToCore(data_logging_ritual,"Datalogging ritual",16384,NULL,1,NULL,1);
-        xTaskCreatePinnedToCore(espnow_car_ritual,"ESP-NOW ritual",8192,NULL,2,NULL,0);
+        xTaskCreate(espnow_car_ritual,"ESP-NOW ritual",8192,NULL,1,NULL);
         ESP_LOGI(TAG, "rituals ran");
     }
     else{

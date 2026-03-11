@@ -5,6 +5,7 @@
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_task_wdt.h"
+#include "esp_timer.h"
 #include "freertos/queue.h"
 
 static const char *TAG = "LTM_ESPNOW";
@@ -18,9 +19,155 @@ static uint8_t car_mac_count = 0;
 static gpio_num_t activity_led;
 static QueueHandle_t rx_queue = NULL;  // Queue for received packets (non-blocking callback)
 
+// Send buffer stack (CAR mode)
+// Circular buffer used as LIFO: push to write_index, pop from (write_index-1).
+// Drop-oldest policy when full: write_index overwrites the oldest slot.
+static uint8_t*           s_stack_buffer   = NULL;
+static uint32_t           s_slot_size      = 0;   // bytes per slot = original_len + 4 (timestamp)
+static uint32_t           s_original_len   = 0;   // packet size without timestamp
+static int32_t            s_write_index    = 0;   // next push writes here [0, MAX_STACK_DEPTH)
+static int32_t            s_count          = 0;   // valid entries [0, MAX_STACK_DEPTH]
+static SemaphoreHandle_t  s_stack_mutex    = NULL;
+static StaticSemaphore_t  s_stack_mutex_buf;
+
+// ACK feedback from espnow_send_cb to espnow_car_ritual.
+// The send task waits on s_ack_sem after each send; the callback gives it and records the result.
+static SemaphoreHandle_t  s_ack_sem        = NULL;
+static StaticSemaphore_t  s_ack_sem_buf;
+static volatile bool      s_last_ack_ok    = false;
+
 // Forward declarations for callbacks
 static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status);
 static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len);
+
+// ---------------------------------------------------------------------------
+// Send buffer stack implementation
+// ---------------------------------------------------------------------------
+
+esp_err_t espnow_buffer_init(uint32_t packet_data_len) {
+    if (packet_data_len > (MAX_MSG_LEN - sizeof(uint32_t))) {
+        ESP_LOGE(TAG, "packet_data_len %lu exceeds max %d (must leave 4 bytes for timestamp)",
+                 packet_data_len, MAX_MSG_LEN - (int)sizeof(uint32_t));
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    s_original_len = packet_data_len;
+    s_slot_size    = packet_data_len + sizeof(uint32_t);
+
+    s_stack_buffer = (uint8_t*)malloc((size_t)MAX_STACK_DEPTH * s_slot_size);
+    if (s_stack_buffer == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate send buffer (%lu bytes)",
+                 (uint32_t)MAX_STACK_DEPTH * s_slot_size);
+        return ESP_ERR_NO_MEM;
+    }
+
+    s_write_index = 0;
+    s_count       = 0;
+
+    s_stack_mutex = xSemaphoreCreateMutexStatic(&s_stack_mutex_buf);
+    if (s_stack_mutex == NULL) {
+        free(s_stack_buffer);
+        s_stack_buffer = NULL;
+        ESP_LOGE(TAG, "Failed to create stack mutex");
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Binary semaphore for ACK feedback: starts empty, send_cb gives it after each TX
+    s_ack_sem = xSemaphoreCreateBinaryStatic(&s_ack_sem_buf);
+    if (s_ack_sem == NULL) {
+        free(s_stack_buffer);
+        s_stack_buffer = NULL;
+        ESP_LOGE(TAG, "Failed to create ACK semaphore");
+        return ESP_ERR_NO_MEM;
+    }
+
+    ESP_LOGI(TAG, "Send buffer initialized: %d slots x %lu bytes = %lu bytes total",
+             MAX_STACK_DEPTH, s_slot_size, (uint32_t)MAX_STACK_DEPTH * s_slot_size);
+    return ESP_OK;
+}
+
+/**
+ * @brief Push a timestamped packet onto the stack (O(1), drop-oldest on overflow).
+ * @param data Original packet data (length = s_original_len, no timestamp).
+ * @return true on success, false if mutex times out.
+ */
+static bool stack_push(const uint8_t* data) {
+    if (s_stack_buffer == NULL) return false;
+
+    if (xSemaphoreTake(s_stack_mutex, pdMS_TO_TICKS(STACK_MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        ESP_LOGW(TAG, "stack_push: mutex timeout");
+        return false;
+    }
+
+    uint8_t* slot = s_stack_buffer + ((size_t)s_write_index * s_slot_size);
+
+    uint32_t ts_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+    memcpy(slot, &ts_ms, sizeof(uint32_t));
+    memcpy(slot + sizeof(uint32_t), data, s_original_len);
+
+    s_write_index = (s_write_index + 1) % MAX_STACK_DEPTH;
+    if (s_count < MAX_STACK_DEPTH) {
+        s_count++;
+    }
+    // If full, count stays at MAX_STACK_DEPTH and oldest slot is silently overwritten.
+
+    xSemaphoreGive(s_stack_mutex);
+    return true;
+}
+
+/**
+ * @brief Push a pre-timestamped slot back onto the stack (used on ACK failure to re-queue).
+ *        The data pointer must point to a full slot (s_slot_size bytes, timestamp already present).
+ */
+static bool stack_push_raw(const uint8_t* slot_data) {
+    if (s_stack_buffer == NULL) return false;
+
+    if (xSemaphoreTake(s_stack_mutex, pdMS_TO_TICKS(STACK_MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        return false;
+    }
+
+    uint8_t* slot = s_stack_buffer + ((size_t)s_write_index * s_slot_size);
+    memcpy(slot, slot_data, s_slot_size);
+
+    s_write_index = (s_write_index + 1) % MAX_STACK_DEPTH;
+    if (s_count < MAX_STACK_DEPTH) {
+        s_count++;
+    }
+
+    xSemaphoreGive(s_stack_mutex);
+    return true;
+}
+
+/**
+ * @brief Pop the newest packet from the stack (O(1), LIFO).
+ * @param out_buf Caller buffer of at least s_slot_size bytes.
+ *                Contains [timestamp_ms (4B)][original packet (s_original_len)] on success.
+ * @param out_len Set to s_slot_size on success.
+ * @return true on success, false if stack empty or mutex times out.
+ */
+static bool stack_pop(uint8_t* out_buf, uint16_t* out_len) {
+    if (s_stack_buffer == NULL) return false;
+
+    if (xSemaphoreTake(s_stack_mutex, pdMS_TO_TICKS(STACK_MUTEX_TIMEOUT_MS)) != pdTRUE) {
+        ESP_LOGW(TAG, "stack_pop: mutex timeout");
+        return false;
+    }
+
+    if (s_count == 0) {
+        xSemaphoreGive(s_stack_mutex);
+        return false;
+    }
+
+    int32_t top = (s_write_index - 1 + MAX_STACK_DEPTH) % MAX_STACK_DEPTH;
+    memcpy(out_buf, s_stack_buffer + ((size_t)top * s_slot_size), s_slot_size);
+    *out_len = (uint16_t)s_slot_size;
+
+    s_write_index = top;
+    s_count--;
+
+    xSemaphoreGive(s_stack_mutex);
+    return true;
+}
 
 /**
  * @brief Initialize NVS flash (required for WiFi)
@@ -79,19 +226,22 @@ static uint32_t send_cb_fail_count = 0;
  */
 static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status) {
     if (status == ESP_NOW_SEND_SUCCESS) {
-        // Transmission successful (got ACK from peer)
         send_cb_success_count++;
+        s_last_ack_ok = true;
         if (activity_led != GPIO_NUM_NC) {
             LED_off(activity_led);
         }
     } else {
-        // Transmission failed (no ACK from peer) - status=1 means ESP_NOW_SEND_FAIL
         send_cb_fail_count++;
-        ESP_LOGV(TAG, "ESP-NOW ACK failed to " MACSTR " (status=%d, likely no ACK from peer)",
-                 MAC2STR(mac_addr), status);
+        s_last_ack_ok = false;
         if (activity_led != GPIO_NUM_NC) {
             LED_off(activity_led);
         }
+    }
+
+    // Signal the send task that the ACK result is ready
+    if (s_ack_sem != NULL) {
+        xSemaphoreGiveFromISR(s_ack_sem, NULL);
     }
 
     // Log statistics every 500 ACKs
@@ -149,11 +299,11 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
         // Never call serial_send() from callback - it blocks the WiFi task!
         rx_packet_count++;
 
-        // Check if all data is zeros (after car_number)
-        if (len > 4) {
-            uint32_t *data_ptr = (uint32_t *)(data + 4);
+        // Check if all data values are zeros (skip timestamp(4) and car_number(4) = first 8 bytes)
+        if (len > 8) {
+            uint32_t *data_ptr = (uint32_t *)(data + 8);
             uint32_t data_sum = 0;
-            for (int i = 4; i < len; i += 4) {
+            for (int i = 8; i < len; i += 4) {
                 if (i + 4 <= len) {
                     data_sum |= *data_ptr;
                     data_ptr++;
@@ -167,13 +317,17 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
             }
         }
 
-        // Queue packet for processing in paddock_ritual task (non-blocking)
-        if (rx_queue != NULL && len <= MAX_MSG_LEN) {
-            espnow_rx_packet_t rx_pkt;
-            memcpy(rx_pkt.data, data, len);
-            rx_pkt.length = len;
+        // Queue packet for processing in paddock_ritual task (non-blocking).
+        // All packets from the car include a 4-byte timestamp prefix (always stripped here).
+        // Minimum valid packet: [timestamp(4)][car_num(4)] = 8 bytes.
+        if (rx_queue != NULL && len >= (int)(2 * sizeof(uint32_t)) && len <= MAX_MSG_LEN) {
+            espnow_rx_packet_t rx_pkt = {0};
 
-            // Use non-blocking queue send (0 timeout)
+            // Strip the leading 4-byte timestamp; remainder is the original [car_num][data...] packet
+            memcpy(&rx_pkt.timestamp_ms, data, sizeof(uint32_t));
+            memcpy(rx_pkt.data, data + sizeof(uint32_t), len - sizeof(uint32_t));
+            rx_pkt.length = (uint16_t)(len - sizeof(uint32_t));
+
             if (xQueueSendFromISR(rx_queue, &rx_pkt, NULL) != pdTRUE) {
                 ESP_LOGV(TAG, "RX queue full, dropping packet (queue likely under high load)");
             }
@@ -370,73 +524,99 @@ int espnow_remove_peer(const uint8_t *peer_mac) {
 }
 
 /**
- * @brief CAR mode main task - transmits telemetry at configured frequency
+ * @brief 10Hz enqueue task. Samples data_service and pushes timestamped packets onto the stack.
+ */
+void espnow_enqueue_task(void* params) {
+    (void)params;
+
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+    ESP_LOGI(TAG, "Enqueue task started at %dHz", ENQUEUE_FREQUENCY);
+
+    uint8_t    data[MAX_MSG_LEN];
+    uint16_t   len;
+    TickType_t curr_ticks;
+
+    while (1) {
+        esp_task_wdt_reset();
+        curr_ticks = xTaskGetTickCount();
+
+        if (data_service_get_LoRa_data(data, &len, car_number) == ESP_OK) {
+            stack_push(data);
+        } else {
+            ESP_LOGW(TAG, "Enqueue: data_service_get_LoRa_data failed");
+        }
+
+        xTaskDelayUntil(&curr_ticks, pdMS_TO_TICKS(1000 / ENQUEUE_FREQUENCY));
+    }
+}
+
+/**
+ * @brief CAR mode main task - drains send buffer stack at 30Hz, newest packet first.
+ *        Waits for ACK after each send. On ACK failure, pushes the packet back so it
+ *        is retried and the stack accumulates during outages.
  */
 void espnow_car_ritual(void* params) {
     (void)params;
 
-    // Subscribe this task to the watchdog timer for extra safety
-    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));  // NULL = current task
-    ESP_LOGI(TAG, "CAR ritual subscribed to watchdog");
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+    ESP_LOGI(TAG, "CAR ritual subscribed to watchdog, sending at %dHz", SEND_FREQUENCY);
+
+    // ACK timeout: ESP-NOW round-trip is typically <10ms. Allow 80ms max before
+    // treating as a failure (covers worst-case retransmit + channel congestion).
+    // This is safely within the 33ms tick period — if the ACK takes longer than
+    // the tick we simply miss that tick's delay, which is acceptable.
+    const TickType_t ACK_TIMEOUT = pdMS_TO_TICKS(80);
 
     TickType_t curr_ticks;
-    static uint32_t send_count = 0;
-    static uint32_t send_success = 0;
+    static uint32_t send_count    = 0;
+    static uint32_t send_success  = 0;
     static uint32_t send_failures = 0;
-    static uint32_t zero_data_count = 0;
+    static uint32_t pushback_count = 0;
 
     while (1) {
-        // Reset watchdog timer
         esp_task_wdt_reset();
-
         curr_ticks = xTaskGetTickCount();
 
-        // Get telemetry data from data service
-        uint8_t data[MAX_MSG_LEN];
-        uint16_t len;
+        uint8_t  tx_buf[MAX_MSG_LEN];
+        uint16_t tx_len = 0;
 
-        esp_err_t err = data_service_get_LoRa_data(data, &len, car_number);
-
-        if (err == ESP_OK) {
+        if (stack_pop(tx_buf, &tx_len)) {
+            // tx_buf = [timestamp_ms (4B)][car_num (4B)][data_0 (4B)]...[data_N (4B)]
+            esp_err_t send_err = espnow_send(paddock_mac, tx_buf, tx_len);
             send_count++;
 
-            // Debug: Check if all data is zeros (after car_number)
-            uint32_t *data_ptr = (uint32_t *)(data + 4);  // Skip car_number (first 4 bytes)
-            uint32_t data_sum = 0;
-            for (uint16_t i = 4; i < len; i += 4) {
-                if (i + 4 <= len) {
-                    data_sum |= *data_ptr;
-                    data_ptr++;
-                }
-            }
-
-            if (data_sum == 0 && len > 4) {
-                zero_data_count++;
-                if (zero_data_count % 50 == 1) {  // Log every 50 frames
-                    ESP_LOGW(TAG, "CAR TX: All data zeros (len=%u) - check CAN input", len);
-                }
-            }
-
-            // Send to paddock
-            esp_err_t send_err = espnow_send(paddock_mac, data, len);
-
             if (send_err == ESP_OK) {
-                send_success++;
+                // Wait for ACK callback to signal the result
+                if (xSemaphoreTake(s_ack_sem, ACK_TIMEOUT) == pdTRUE) {
+                    if (s_last_ack_ok) {
+                        send_success++;
+                    } else {
+                        // Paddock didn't ACK — link is down, push packet back onto stack
+                        send_failures++;
+                        pushback_count++;
+                        stack_push_raw(tx_buf);
+                    }
+                } else {
+                    // ACK timed out — treat as failure, push back
+                    send_failures++;
+                    pushback_count++;
+                    stack_push_raw(tx_buf);
+                }
             } else {
+                // esp_now_send itself failed locally (peer not found, queue full, etc.)
                 send_failures++;
+                pushback_count++;
+                stack_push_raw(tx_buf);
             }
 
-            // Log statistics every 500 frames (~10 seconds at 50Hz)
-            if (send_count % 500 == 0) {
-                ESP_LOGI(TAG, "CAR TX Stats: sent=%lu, success=%lu, fail=%lu, zero_data=%lu (%.1f%%)",
-                         send_count, send_success, send_failures,
-                         zero_data_count, (float)zero_data_count*100.0f/(float)send_count);
+            // Log statistics every 300 frames (~10 seconds at 30Hz)
+            if (send_count % 300 == 0) {
+                ESP_LOGI(TAG, "CAR TX: sent=%lu ok=%lu fail=%lu pushback=%lu depth=%ld",
+                         send_count, send_success, send_failures, pushback_count, (long)s_count);
             }
-        } else {
-            ESP_LOGW(TAG, "Failed to get LoRa data: %s", esp_err_to_name(err));
         }
+        // Stack empty — skip this tick, delay still fires on schedule.
 
-        // Delay until next transmission (50Hz = 20ms)
         xTaskDelayUntil(&curr_ticks, pdMS_TO_TICKS(1000 / SEND_FREQUENCY));
     }
 }
@@ -467,7 +647,7 @@ void espnow_paddock_ritual(void* params) {
         if (xQueueReceive(rx_queue, &rx_pkt, pdMS_TO_TICKS(100)) == pdTRUE) {
             // Process the packet: send to serial
             // This can block, so we feed the watchdog before and after
-            serial_send(rx_pkt.data, rx_pkt.length);
+            serial_send(rx_pkt.data, rx_pkt.length, rx_pkt.timestamp_ms);
             packets_processed++;
 
             // Feed watchdog again after potentially long printf operation

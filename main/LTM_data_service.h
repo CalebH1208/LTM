@@ -19,4 +19,8 @@ esp_err_t data_service_write_global_time(uint8_t* frame_data);
 
 esp_err_t data_service_handle_semaphor(SemaphoreHandle_t checkSemaphore, SemaphoreHandle_t takeSemaphore);
 
+// Returns a counter that increments on every data_service_write() call.
+// Used by the enqueue task to detect whether fresh CAN data has arrived since the last push.
+uint32_t data_service_get_write_seq(void);
+
 #endif //LTM_DATA_SERVICE_H

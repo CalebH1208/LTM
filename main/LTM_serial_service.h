@@ -7,7 +7,7 @@
 
 esp_err_t serial_service_init(paddock_array_t* array);
 
-esp_err_t serial_send(uint8_t* data, uint16_t length);
+esp_err_t serial_send(uint8_t* data, uint16_t length, uint32_t timestamp_ms);
 
 void serial_clear_on_next_printf(bool state);
 

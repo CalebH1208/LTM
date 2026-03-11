@@ -11,7 +11,10 @@
 #define MAX_MSG_LEN 250  // ESP-NOW v1.0 max payload
 #define RX_QUEUE_SIZE 20   // Queue for received packets (non-blocking callback)
 
-#define SEND_FREQUENCY 50  // 50Hz transmission rate
+#define SEND_FREQUENCY       30   // 30Hz send rate from stack (~33ms period)
+#define ENQUEUE_FREQUENCY    10   // 10Hz enqueue rate into stack (~100ms period)
+#define MAX_STACK_DEPTH      300  // Maximum buffered packets (~30 seconds at 10Hz)
+#define STACK_MUTEX_TIMEOUT_MS 5  // Mutex timeout for stack push/pop
 
 // WiFi and ESP-NOW configuration
 typedef struct {
@@ -30,8 +33,9 @@ typedef struct {
 
 // Received packet queue structure (for non-blocking serial output)
 typedef struct {
-    uint8_t data[MAX_MSG_LEN];       // Packet data
+    uint8_t  data[MAX_MSG_LEN];      // Packet data (timestamp already stripped)
     uint16_t length;                 // Data length
+    uint32_t timestamp_ms;           // Capture uptime in ms from car (0 if not present)
 } espnow_rx_packet_t;
 
 // Command packet structures for bidirectional communication
@@ -83,7 +87,22 @@ int espnow_paddock_send_command(const uint8_t *dest_mac, uint32_t cmd_type,
                                 uint8_t* payload, size_t payload_len);
 
 /**
- * @brief CAR mode main task - transmits telemetry at configured frequency
+ * @brief Initialize the send buffer stack. Must be called after espnow_init()
+ *        once LoRa_array_length is known from config parse.
+ * @param packet_data_len Size of original data packet WITHOUT timestamp prefix.
+ *                        = sizeof(uint32_t) * (LoRa_array_length + 1). Must be <= 246.
+ * @return ESP_OK on success, ESP_ERR_NO_MEM or ESP_ERR_INVALID_ARG on failure.
+ */
+esp_err_t espnow_buffer_init(uint32_t packet_data_len);
+
+/**
+ * @brief 10Hz enqueue task. Samples data_service and pushes timestamped packets onto the stack.
+ * @param params Task parameters (unused)
+ */
+void espnow_enqueue_task(void* params);
+
+/**
+ * @brief CAR mode main task - transmits at 30Hz from the send buffer stack
  * @param params Task parameters (unused)
  */
 void espnow_car_ritual(void* params);

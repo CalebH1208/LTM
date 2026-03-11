@@ -21,9 +21,9 @@ void serial_clear_on_next_printf(bool state){
     clear_on_next_printf = state;
 }
 
-void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* data_array, uint16_t length, int16_t car_num);
+void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* data_array, uint16_t length, int16_t car_num, uint32_t timestamp_ms);
 
-esp_err_t serial_send(uint8_t* data, uint16_t length){
+esp_err_t serial_send(uint8_t* data, uint16_t length, uint32_t timestamp_ms){
     uint32_t* data_array = (uint32_t*)data;
     //printf("length: %d\n",length);
     length /= 4;
@@ -36,7 +36,7 @@ esp_err_t serial_send(uint8_t* data, uint16_t length){
         char serial_buffer[SERIAL_BUFFER_LENGTH];
         for(int i = 0; i < paddock_array->num_cars; i++){
             if(data_array[0] == paddock_array->cars[i].car_number){
-                compile_buffer(serial_buffer, paddock_array->cars[i].elements, data_array, paddock_array->cars[i].array_length, paddock_array->cars[i].car_number);
+                compile_buffer(serial_buffer, paddock_array->cars[i].elements, data_array, paddock_array->cars[i].array_length, paddock_array->cars[i].car_number, timestamp_ms);
                 // ESP_LOGI(TAG,"Started print");
                 printf("%s", serial_buffer);
                 // ESP_LOGI(TAG,"stopped print");
@@ -57,7 +57,7 @@ esp_err_t serial_send(uint8_t* data, uint16_t length){
     return ESP_OK;
 }
 
-void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* data_array, uint16_t length, int16_t car_num){
+void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* data_array, uint16_t length, int16_t car_num, uint32_t timestamp_ms){
     //printf("length: %d\n",length);
     value_union_t data;
     uint32_t buffer_index = 0;
@@ -80,6 +80,9 @@ void compile_buffer(char* serial_buffer, paddock_element_t* elements, uint32_t* 
 
         buffer_index += snprintf(serial_buffer + buffer_index, SERIAL_BUFFER_LENGTH - buffer_index, "%s,%s,%.7f\n", elements[i].name, elements[i].unit, data_float);
         //printf("buffer_index: %ld\n",buffer_index);
+    }
+    if(timestamp_ms > 0){
+        buffer_index += snprintf(serial_buffer + buffer_index, SERIAL_BUFFER_LENGTH - buffer_index, "TS:%lums\n", (unsigned long)timestamp_ms);
     }
     //printf("placing buffer end at: %ld\n",buffer_index);
     serial_buffer[buffer_index++] = '|';

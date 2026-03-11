@@ -2,6 +2,8 @@
 
 static const char *TAG = "Data_Service";
 
+static volatile uint32_t s_write_seq = 0;  // incremented on every data_service_write call
+
 static int reader_count;
 static SemaphoreHandle_t read_lock;
 StaticSemaphore_t read_lock_buffer;
@@ -110,6 +112,8 @@ esp_err_t data_service_write(uint32_t index, uint32_t data, uint8_t len){
     // writer_count++;
 
         
+    s_write_seq++;
+
     if(car_state->elements[index].type == 'i'){
         // ESP_LOGI(TAG,"converting data to int type: %lu also %ld",data, data);
         // ESP_LOGI(TAG, "if shit: %ld",data >> (len - 1) & 0x01);

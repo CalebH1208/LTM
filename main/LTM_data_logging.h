@@ -12,7 +12,7 @@ esp_err_t data_logging_init(CAN_metadata_t CAN_data);
 
 void data_logging_ritual();
 
-char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t * state, size_t * str_len, int64_t time);
+char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t * state, size_t * str_len, int64_t time, uint32_t marker, bool include_marker);
 
 void write_data(char * data, size_t data_length, FILE * fptr);
 

@@ -65,17 +65,17 @@ void data_logging_ritual(){
         gettimeofday(&up_time,NULL);
         up_time_ms = (int64_t)up_time.tv_sec * 1000000L + (int64_t)up_time.tv_usec;
 
-        csv_string = parse_data_string(indices_100Hz, length_100Hz, state, &str_len, up_time_ms);
+        csv_string = parse_data_string(indices_100Hz, length_100Hz, state, &str_len, up_time_ms, state->marker, true);
         //ESP_LOGI(TAG,"csv string: %s | strlen: %d",csv_string,str_len);
         write_data(csv_string, str_len, fptr_100HZ);
 
         if(count % 10 == 0){
-            csv_string = parse_data_string(indices_10Hz, length_10Hz, state, &str_len, up_time_ms);
+            csv_string = parse_data_string(indices_10Hz, length_10Hz, state, &str_len, up_time_ms, 0, false);
             write_data(csv_string, str_len, fptr_10HZ);
         }
 
         if(count % 100 == 0){
-            csv_string = parse_data_string(indices_1Hz, length_1Hz, state, &str_len, up_time_ms);
+            csv_string = parse_data_string(indices_1Hz, length_1Hz, state, &str_len, up_time_ms, 0, false);
             write_data(csv_string, str_len, fptr_1HZ);
 
             fclose(fptr_100HZ);
@@ -97,7 +97,7 @@ void data_logging_ritual(){
     }
 }
 
-char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t * state, size_t * str_len, int64_t up_time){
+char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t * state, size_t * str_len, int64_t up_time, uint32_t marker, bool include_marker){
     char * buffer = calloc(BUFFER_LENGTH, sizeof(char));
     if(buffer == NULL){
         return buffer;
@@ -146,7 +146,13 @@ char * parse_data_string(uint32_t * indices, uint32_t num_indices, car_state_t *
                 return NULL;
             }
         }
-        
+
+    }
+    if(include_marker){
+        bytes_written = snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",%lu", (unsigned long)marker);
+        if(bytes_written > 0){
+            buffer_index += bytes_written;
+        }
     }
     buffer[buffer_index++] = '\n';
     *str_len = buffer_index;

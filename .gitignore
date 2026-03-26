@@ -1,3 +1,5 @@
 build/*
 *.MD
 .claude/*
+**.venv/**
+tools/.venv/*

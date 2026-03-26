@@ -1,6 +1,11 @@
 #include "LTM_data_service.h"
+#include "esp_timer.h"
 
 static const char *TAG = "Data_Service";
+
+static esp_timer_handle_t s_marker_timer = NULL;
+
+
 
 static volatile uint32_t s_write_seq = 0;  // incremented on every data_service_write call
 
@@ -16,6 +21,10 @@ static car_state_t* car_state;
 static uint32_t* LoRa_adrr_array;
 static uint32_t LoRa_adrr_array_length;
 
+static void marker_timer_cb(void* arg) {
+    car_state->marker = 0;
+}
+
 esp_err_t data_service_init(car_state_t* state, uint32_t* LoRa_array, uint32_t array_length){
     car_state = state;
     LoRa_adrr_array = LoRa_array;
@@ -26,6 +35,14 @@ esp_err_t data_service_init(car_state_t* state, uint32_t* LoRa_array, uint32_t a
 
     xSemaphoreGive(read_lock);
     xSemaphoreGive(write_lock);
+
+    esp_timer_create_args_t timer_args = {
+        .callback = marker_timer_cb,
+        .arg = NULL,
+        .name = "marker_timer"
+    };
+    esp_timer_create(&timer_args, &s_marker_timer);
+    car_state->marker = 0;
 
     ESP_LOGI(TAG, "Data Service Init Success");
     return ESP_OK;
@@ -60,7 +77,10 @@ esp_err_t data_service_get_LoRa_data(uint8_t * data, uint16_t * len, int car_num
         full_val[i+1] = temp_elements_copy[LoRa_adrr_array[i]].data.u;
     }
 
-    *len = sizeof(uint32_t) * (LoRa_adrr_array_length+1);
+    // Append marker value as the last uint32 in the packet
+    full_val[LoRa_adrr_array_length + 1] = car_state->marker;
+
+    *len = sizeof(uint32_t) * (LoRa_adrr_array_length + 2);
 
     //ESP_LOGW(TAG,"length of data: %d, %ld, %ld, %ld, %ld",*len,full_val[0],full_val[1],full_val[2],full_val[3]);
     free(temp_elements_copy);
@@ -93,6 +113,7 @@ car_state_t * data_service_get_car_state(){
     temp_state_copy->car_number = car_state->car_number;
     temp_state_copy->data_length = car_state->data_length;
     temp_state_copy->time = car_state->time;
+    temp_state_copy->marker = car_state->marker;
     memcpy(temp_state_copy->elements, car_state->elements, car_state->data_length * sizeof(car_element_t));
 
     // reader_count--;
@@ -177,6 +198,37 @@ esp_err_t data_service_write_paddock(uint32_t index, uint32_t data){
     }
 
     return ESP_OK;
+}
+
+void data_service_trigger_marker(void) {
+    unsigned long counter = 0;
+
+    FILE* f = fopen(PATH_MARKER, "r");
+    if (f != NULL) {
+        fscanf(f, "%lu", &counter);
+        fclose(f);
+    }
+    counter++;
+
+    f = fopen(PATH_MARKER, "w");
+    if (f != NULL) {
+        fprintf(f, "%lu\n", counter);
+        fclose(f);
+    } else {
+        ESP_LOGE(TAG, "Failed to write marker file");
+    }
+
+    ESP_LOGI(TAG, "Marker triggered: counter=%lu", counter);
+    car_state->marker = (uint32_t)counter;
+    if (esp_timer_is_active(s_marker_timer)) {
+        esp_timer_stop(s_marker_timer);
+    }
+    esp_timer_start_once(s_marker_timer, 1000 * 1000ULL);
+}
+
+void data_service_reset_marker_file(void) {
+    remove(PATH_MARKER);
+    ESP_LOGI(TAG, "Marker file reset (fresh session)");
 }
 
 // if(data_service_handle_semaphor(write_lock, read_lock) != ESP_OK){

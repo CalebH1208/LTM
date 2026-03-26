@@ -36,9 +36,24 @@ static SemaphoreHandle_t  s_ack_sem        = NULL;
 static StaticSemaphore_t  s_ack_sem_buf;
 static volatile bool      s_last_ack_ok    = false;
 
+// Marker pending flag: set by espnow_recv_cb (WiFi task) when MARKER command arrives.
+// Consumed by espnow_enqueue_task (Core 0) to trigger data_service_trigger_marker().
+static volatile bool      s_marker_pending = false;
+
+// Outbound marker command from serial_rx_task to espnow_paddock_ritual.
+// serial_rx_task sets s_paddock_marker_mac and s_paddock_marker_pending;
+// espnow_paddock_ritual calls esp_now_send from its own context (avoiding concurrent send).
+static volatile bool      s_paddock_marker_pending = false;
+static uint8_t            s_paddock_marker_mac[6]  = {0};
+
 // Forward declarations for callbacks
 static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status);
 static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len);
+
+void espnow_paddock_queue_marker(const uint8_t *dest_mac) {
+    memcpy(s_paddock_marker_mac, dest_mac, 6);
+    s_paddock_marker_pending = true;
+}
 
 // ---------------------------------------------------------------------------
 // Send buffer stack implementation
@@ -288,6 +303,10 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
                 case ESPNOW_CMD_TYPE_PARAM_TUNE:
                     ESP_LOGD(TAG, "Received PARAM_TUNE from paddock");
                     // TODO: Implement parameter tuning
+                    break;
+                case ESPNOW_CMD_TYPE_MARKER:
+                    ESP_LOGD(TAG, "Received MARKER command from paddock");
+                    s_marker_pending = true;
                     break;
                 default:
                     ESP_LOGV(TAG, "Unknown command type: %lu", cmd_type);
@@ -540,6 +559,11 @@ void espnow_enqueue_task(void* params) {
         esp_task_wdt_reset();
         curr_ticks = xTaskGetTickCount();
 
+        if (s_marker_pending) {
+            s_marker_pending = false;
+            data_service_trigger_marker();
+        }
+
         if (data_service_get_LoRa_data(data, &len, car_number) == ESP_OK) {
             stack_push(data);
         } else {
@@ -643,10 +667,16 @@ void espnow_paddock_ritual(void* params) {
         // Reset watchdog timer to prevent timeout
         esp_task_wdt_reset();
 
+        // Send outbound marker command if queued by serial_rx_task.
+        // Must be called from THIS task to avoid concurrent esp_now_send calls.
+        if (s_paddock_marker_pending) {
+            s_paddock_marker_pending = false;
+            uint8_t dummy = 0;
+            espnow_paddock_send_command(s_paddock_marker_mac, ESPNOW_CMD_TYPE_MARKER, &dummy, 0);
+        }
+
         // Try to get a packet from queue with timeout
         if (xQueueReceive(rx_queue, &rx_pkt, pdMS_TO_TICKS(100)) == pdTRUE) {
-            // Process the packet: send to serial
-            // This can block, so we feed the watchdog before and after
             serial_send(rx_pkt.data, rx_pkt.length, rx_pkt.timestamp_ms);
             packets_processed++;
 

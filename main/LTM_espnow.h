@@ -11,9 +11,9 @@
 #define MAX_MSG_LEN 250  // ESP-NOW v1.0 max payload
 #define RX_QUEUE_SIZE 20   // Queue for received packets (non-blocking callback)
 
-#define SEND_FREQUENCY       30   // 30Hz send rate from stack (~33ms period)
+#define SEND_FREQUENCY       40   // 30Hz send rate from stack (~20ms period)
 #define ENQUEUE_FREQUENCY    10   // 10Hz enqueue rate into stack (~100ms period)
-#define MAX_STACK_DEPTH      300  // Maximum buffered packets (~30 seconds at 10Hz)
+#define MAX_STACK_DEPTH      1000  // Maximum buffered packets (~30 seconds at 10Hz)
 #define STACK_MUTEX_TIMEOUT_MS 5  // Mutex timeout for stack push/pop
 
 // WiFi and ESP-NOW configuration
@@ -44,7 +44,8 @@ typedef enum {
     ESPNOW_CMD_TYPE_DATA_REQUEST = 2,
     ESPNOW_CMD_TYPE_CONFIG_UPDATE = 3,
     ESPNOW_CMD_TYPE_PARAM_TUNE = 4,
-    ESPNOW_CMD_TYPE_ACK = 5
+    ESPNOW_CMD_TYPE_ACK = 5,
+    ESPNOW_CMD_TYPE_MARKER = 6
 } espnow_command_type_t;
 
 typedef struct {
@@ -85,6 +86,13 @@ int espnow_send(const uint8_t *dest_mac, uint8_t* data, size_t length);
  */
 int espnow_paddock_send_command(const uint8_t *dest_mac, uint32_t cmd_type,
                                 uint8_t* payload, size_t payload_len);
+
+/**
+ * @brief Queue a MARKER command for the next espnow_paddock_ritual tick.
+ *        Safe to call from any task — avoids concurrent esp_now_send conflicts.
+ * @param dest_mac Destination car MAC address (6 bytes)
+ */
+void espnow_paddock_queue_marker(const uint8_t *dest_mac);
 
 /**
  * @brief Initialize the send buffer stack. Must be called after espnow_init()

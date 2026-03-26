@@ -83,7 +83,9 @@ void app_main(void){
 
     if(LTM_type == CAR){
         ESP_LOGI(TAG,"THIS IS A CAR SIDE ESP");
+        bool fresh_session = write_header_is_fresh_session();
         ESP_ERROR_CHECK(write_header());
+        if(fresh_session) data_service_reset_marker_file();
         ESP_ERROR_CHECK(finish_initialization());
 
         ESP_ERROR_CHECK(data_service_init(&car_state, LoRa_array,LoRa_array_len));
@@ -92,8 +94,8 @@ void app_main(void){
         ESP_ERROR_CHECK(espnow_init(&espnow_config, car_state.car_number, LTM_type,
                                     espnow_peer_macs, espnow_peer_count));
 
-        // Initialize send buffer: packet = [car_num (uint32)] + [N data values (uint32 each)]
-        uint32_t espnow_packet_data_len = sizeof(uint32_t) * (LoRa_array_len + 1);
+        // Initialize send buffer: packet = [car_num (uint32)] + [N data values (uint32 each)] + [marker (uint32)]
+        uint32_t espnow_packet_data_len = sizeof(uint32_t) * (LoRa_array_len + 2);
         ESP_ERROR_CHECK(espnow_buffer_init(espnow_packet_data_len));
 
         ESP_LOGI(TAG, "inits ran");
@@ -101,7 +103,6 @@ void app_main(void){
         xTaskCreatePinnedToCore(CAN_ritual,"CAN ritual",4096,NULL,2,NULL,0);
         xTaskCreatePinnedToCore(data_logging_ritual,"Datalogging ritual",16384,NULL,1,NULL,1);
         xTaskCreate(espnow_car_ritual,"ESP-NOW ritual",8192,NULL,1,NULL);
-        // 10Hz enqueue task: pinned to Core 0 alongside CAN (CAN blocks on twai_receive most of the time)
         xTaskCreatePinnedToCore(espnow_enqueue_task,"ESPNOW Enqueue",4096,NULL,1,NULL,0);
         ESP_LOGI(TAG, "rituals ran");
     }
@@ -113,6 +114,7 @@ void app_main(void){
         ESP_LOGI(TAG, "inits ran");
 
         xTaskCreate(espnow_paddock_ritual, "ESP-NOW Ritual", 16384, NULL, 2, NULL);
+        xTaskCreate(serial_rx_task, "Serial RX", 4096, NULL, 3, NULL);
         ESP_LOGI(TAG, "rituals ran");
     }
 

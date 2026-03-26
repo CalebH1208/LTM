@@ -20,6 +20,7 @@
 #define PATH_100HZ MOUNT_POINT"/100HzLog.csv"
 #define PATH_10HZ MOUNT_POINT"/10HzLog.csv"
 #define PATH_1HZ MOUNT_POINT"/1HzLog.csv"
+#define PATH_MARKER MOUNT_POINT"/marker.txt"
 
 #define MAX_CAN_ID_COUNT 256
 
@@ -68,6 +69,7 @@ typedef struct{
     uint32_t data_length;
     global_time_t time;
     car_element_t * elements;
+    volatile uint32_t marker;
 }car_state_t;
 
 typedef struct{
@@ -82,6 +84,7 @@ typedef struct{
     int32_t car_number;
     int32_t array_length;
     paddock_element_t* elements;
+    uint8_t mac[6];
 }paddock_state_t;
 
 typedef struct{

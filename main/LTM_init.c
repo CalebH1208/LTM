@@ -126,6 +126,7 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
                    &espnow_peer_macs[peer_index][0], &espnow_peer_macs[peer_index][1],
                    &espnow_peer_macs[peer_index][2], &espnow_peer_macs[peer_index][3],
                    &espnow_peer_macs[peer_index][4], &espnow_peer_macs[peer_index][5]);
+            memcpy(paddock_state_array[index].mac, espnow_peer_macs[peer_index], 6);
             peer_index++;
             ESP_LOGI(TAG, "PADDOCK mode: Car#%d MAC = %02X:%02X:%02X:%02X:%02X:%02X",
                      cJSON_car_num->valueint,
@@ -369,23 +370,32 @@ esp_err_t finish_initialization(){
     return ESP_OK;
 }
 
+bool write_header_is_fresh_session(void) {
+    FILE* f = fopen(PATH_100HZ, "a");
+    if (f == NULL) return false;
+    fseek(f, 0, SEEK_END);
+    bool fresh = (ftell(f) == 0);
+    fclose(f);
+    return fresh;
+}
+
 esp_err_t write_header(){
     FILE * fptr_100HZ = fopen(PATH_100HZ, "a");
     FILE * fptr_10HZ = fopen(PATH_10HZ, "a");
     FILE * fptr_1HZ = fopen(PATH_1HZ, "a");
 
-    ESP_ERROR_CHECK(write_header_helper(fptr_100HZ,indices_100Hz,length_100Hz));
-    ESP_ERROR_CHECK(write_header_helper(fptr_10HZ,indices_10Hz,length_10Hz));
-    ESP_ERROR_CHECK(write_header_helper(fptr_1HZ,indices_1Hz,length_1Hz));
+    ESP_ERROR_CHECK(write_header_helper(fptr_100HZ, indices_100Hz, length_100Hz, true));
+    ESP_ERROR_CHECK(write_header_helper(fptr_10HZ,  indices_10Hz,  length_10Hz,  false));
+    ESP_ERROR_CHECK(write_header_helper(fptr_1HZ,   indices_1Hz,   length_1Hz,   false));
 
     fclose(fptr_100HZ);
     fclose(fptr_10HZ);
     fclose(fptr_1HZ);
-    
+
     return ESP_OK;
 }
 
-esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indices){
+esp_err_t write_header_helper(FILE* file, uint32_t* indices, uint32_t num_indices, bool include_marker){
     char * buffer = calloc(BUFFER_LENGTH, sizeof(char));
     if(NULL == buffer){
         return ESP_ERR_NO_MEM;
@@ -408,6 +418,7 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
             return ESP_ERR_NO_MEM;
         }
     }
+    if(include_marker){ buffer_index += snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",MARKER"); }
     buffer[buffer_index] = '\n';
     write_data_no_free(buffer,++buffer_index,file);
     buffer_index = 0;
@@ -429,6 +440,7 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
             return ESP_ERR_NO_MEM;
         }
     }
+    if(include_marker){ buffer_index += snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",count"); }
     buffer[buffer_index] = '\n';
     write_data_no_free(buffer,++buffer_index,file);
     buffer_index = 0;
@@ -450,6 +462,7 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
             return ESP_ERR_NO_MEM;
         }
     }
+    if(include_marker){ buffer_index += snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",1.0000000"); }
     buffer[buffer_index] = '\n';
     write_data_no_free(buffer,++buffer_index,file);
     buffer_index = 0;
@@ -471,6 +484,7 @@ esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indice
             return ESP_ERR_NO_MEM;
         }
     }
+    if(include_marker){ buffer_index += snprintf(buffer + buffer_index, BUFFER_LENGTH - buffer_index, ",1"); }
     buffer[buffer_index] = '\n';
     write_data(buffer,++buffer_index,file);
     return ESP_OK;

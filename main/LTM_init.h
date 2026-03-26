@@ -52,8 +52,12 @@ esp_err_t parse_JSON_globals(init_parameters params);
 
 esp_err_t finish_initialization();
 
+// Returns true if the 100Hz log file is empty (fresh session — old files were deleted).
+// Must be called BEFORE write_header().
+bool write_header_is_fresh_session(void);
+
 esp_err_t write_header();
 
-esp_err_t write_header_helper(FILE* file,uint32_t * indices, uint32_t num_indices);
+esp_err_t write_header_helper(FILE* file, uint32_t* indices, uint32_t num_indices, bool include_marker);
 
 #endif //INIT_H

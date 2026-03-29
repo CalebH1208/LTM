@@ -427,19 +427,31 @@ int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
             ESP_LOGW(TAG, "CAR mode: No peer MAC configured (peer_count=%d)", peer_count);
         }
     } else {
-        // PADDOCK mode: Register all car MACs as peers
-        ESP_LOGI(TAG, "PADDOCK mode: Registering %d car MACs as peers", peer_count);
-        car_mac_count = peer_count;
+        // PADDOCK mode: Register all car MACs and Lap Timer MAC as peers 
+        ESP_LOGI(TAG, "PADDOCK mode: Registering %d car MACs as peers", peer_count-1);
+        car_mac_count = peer_count-1;
 
         if (peer_count > 0) {
-            car_macs = (uint8_t *)malloc(6 * peer_count);
+            //Lap Timer MAC
+            uint8_t lt_mac[6];
+            memcpy(lt_mac, (uint8_t *)peer_macs[0], 6);
+            static const uint8_t zero_mac[6] = {0};
+            if(memcmp(lt_mac, zero_mac, 6) != 0) {
+                ESP_LOGI(TAG, "Adding LT_Peer:");
+                ESP_ERROR_CHECK(espnow_add_peer(lt_mac, config->channel, false));
+            }
+            else {
+                ESP_LOGW(TAG, "LT_Peer MAC is not valid");
+            }
+
+            car_macs = (uint8_t *)malloc(6 * (peer_count-1));
             if (car_macs == NULL) {
                 ESP_LOGE(TAG, "Failed to allocate car_macs array");
                 return ESP_ERR_NO_MEM;
             }
-            memcpy(car_macs, (uint8_t *)peer_macs, 6 * peer_count);
+            memcpy(car_macs, (uint8_t *)peer_macs[1], 6 * (peer_count-1)); //Skip the Lap Timer MAC
 
-            for (uint8_t i = 0; i < peer_count; i++) {
+            for (uint8_t i = 0; i < peer_count-1; i++) {
                 uint8_t *car_mac = car_macs + (i * 6);
                 ESP_LOGI(TAG, "Adding peer %d: " MACSTR, i, MAC2STR(car_mac));
                 ESP_ERROR_CHECK(espnow_add_peer(car_mac, config->channel, false));

@@ -65,7 +65,7 @@ typedef struct {
  * @return ESP_OK on success, error code on failure
  */
 int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
-                uint8_t peer_macs[][6], uint8_t peer_count);
+                uint8_t peer_macs[][6], uint8_t peer_count, uint8_t car_peer_count, lt_array_t* LT_array);
 
 /**
  * @brief Send ESP-NOW data to a specific peer

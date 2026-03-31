@@ -89,8 +89,19 @@ typedef struct{
 
 typedef struct{
     uint8_t num_cars;
-    paddock_state_t * cars;
+    paddock_state_t* cars;
 }paddock_array_t;
+
+typedef struct {
+    int32_t label;
+    int32_t position;
+    uint8_t mac[6];
+}lt_state_t;
+
+typedef struct {
+    uint8_t num_lts;
+    lt_state_t* lts;
+}lt_array_t;
 
 typedef struct data_value{
     uint32_t index;

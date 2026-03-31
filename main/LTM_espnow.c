@@ -15,7 +15,10 @@ static LTM_type_t system_mode;
 static uint32_t car_number;
 static uint8_t paddock_mac[6];
 static uint8_t *car_macs = NULL;
+static uint8_t *lt_macs = NULL;
+static lt_state_t *lt_states = NULL;
 static uint8_t car_mac_count = 0;
+static uint8_t lt_mac_count = 0;
 static gpio_num_t activity_led;
 static QueueHandle_t rx_queue = NULL;  // Queue for received packets (non-blocking callback)
 
@@ -345,7 +348,21 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
             // Strip the leading 4-byte timestamp; remainder is the original [car_num][data...] packet
             memcpy(&rx_pkt.timestamp_ms, data, sizeof(uint32_t));
             memcpy(rx_pkt.data, data + sizeof(uint32_t), len - sizeof(uint32_t));
-            rx_pkt.length = (uint16_t)(len - sizeof(uint32_t));
+
+            rx_pkt.length = (uint16_t)(len - sizeof(uint32_t)); 
+
+            //Extra Special Step for the LapTimers (car_num == -1)
+            if(*(uint32_t*)(data+sizeof(uint32_t)) == -1)  {//Check if car_number is -1
+                for(int i = 0; i < lt_mac_count; i++) {
+                    if(memcmp(recv_info->src_addr, lt_states[i].mac, 6) == 0) {
+                        //This packet is from a Lap Timer, so we need to find what segment it is
+                        uint8_t pos = lt_states[i].position;
+                        memcpy(rx_pkt.data + len - sizeof(uint32_t), &pos, sizeof(uint8_t)); //Copy the segment position to the end of the rx_pkt.data
+                        break;
+                    }
+                }
+                rx_pkt.length = (uint16_t)(len - sizeof(uint32_t) + sizeof(uint8_t)); // Adjust length to account for stripped timestamp and added POS
+            }
 
             if (xQueueSendFromISR(rx_queue, &rx_pkt, NULL) != pdTRUE) {
                 ESP_LOGV(TAG, "RX queue full, dropping packet (queue likely under high load)");
@@ -362,12 +379,28 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
  * @brief Initialize ESP-NOW wireless communication
  */
 int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
-                uint8_t peer_macs[][6], uint8_t peer_count) {
-
+                uint8_t peer_macs[][6], uint8_t peer_count, uint8_t car_peer_count, lt_array_t* LT_array) {
+    lt_states = LT_array->lts; // Store pointer to LT States for later use in receive callback
+    uint8_t lt_peer_count = LT_array->num_lts;
+    if(peer_count > 20) {
+        ESP_LOGW(TAG, "peer_count %d exceeds max 20, truncating to 20", peer_count);
+        peer_count = 20;
+    }
+    if(peer_count > (lt_peer_count car_peer_count)) {
+        ESP_LOGW(TAG, "peer_count: '%d' is greater than lt_peer_count: '%d' + car_peer_count: '%d', so some peers may be ignored",
+                 peer_count, lt_peer_count, car_peer_count);
+    }
+    if (peer_count < (lt_peer_count + car_peer_count)) {
+        ESP_LOGW(TAG, "peer_count: '%d' is less than lt_peer_count: '%d' + car_peer_count: '%d', so some peers may be missing",
+                 peer_count, lt_peer_count, car_peer_count);
+    }
+    
     // Store global parameters
     system_mode = ltm_type;
     car_number = car_num;
     activity_led = config->activity_led;
+    car_mac_count = car_peer_count;
+    lt_mac_count = lt_peer_count;
 
     // Initialize LED if configured
     if (activity_led != GPIO_NUM_NC) {
@@ -428,30 +461,44 @@ int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
         }
     } else {
         // PADDOCK mode: Register all car MACs and Lap Timer MAC as peers 
-        ESP_LOGI(TAG, "PADDOCK mode: Registering %d car MACs as peers", peer_count-1);
-        car_mac_count = peer_count-1;
+        ESP_LOGI(TAG, "PADDOCK mode: Registering %d car MACs as peers, %d LT MACS as peers, %d Total_Peers", car_peer_count, lt_peer_count, peer_count);
 
         if (peer_count > 0) {
-            //Lap Timer MAC
-            uint8_t lt_mac[6];
-            memcpy(lt_mac, (uint8_t *)peer_macs[0], 6);
-            static const uint8_t zero_mac[6] = {0};
-            if(memcmp(lt_mac, zero_mac, 6) != 0) {
-                ESP_LOGI(TAG, "Adding LT_Peer:");
+            //Lap Timer MACs
+            lt_macs = (uint8_t *)malloc(6 * lt_peer_count);
+            if (lt_macs == NULL) {
+                ESP_LOGE(TAG, "Failed to allocate lt_macs array");
+                return ESP_ERR_NO_MEM;
+            }
+            
+            memcpy(lt_macs, (uint8_t *)peer_macs[0], 6 * lt_peer_count); //First 'lt_peer_count' MACs are for Lap Timers
+
+            for (uint8_t i = 0; i < lt_peer_count; i++) {
+                uint8_t* lt_mac = lt_macs + (i * 6);
+                ESP_LOGI(TAG, "Adding peer %d: " MACSTR, i, MAC2STR(lt_mac));
                 ESP_ERROR_CHECK(espnow_add_peer(lt_mac, config->channel, false));
             }
-            else {
-                ESP_LOGW(TAG, "LT_Peer MAC is not valid");
-            }
 
-            car_macs = (uint8_t *)malloc(6 * (peer_count-1));
+            //Car Macs
+            /**
+             * Account for the cases stated at the top: Prioritizing LT_Macs since they are probably more important 
+             *  in the case when we are actually using them
+             * 
+             * new_car_mac will be peer_count - lt_peer_count to account for the case of there being less peers than lt_peer_count + car_peer_count
+             * 
+             * The case with more peers than lt_peer_count and car_peer_count is handled automatically by how the code works
+             */
+            new_car_mac = peer_count - lt_peer_count; 
+            car_mac_count = new_car_mac;
+
+            car_macs = (uint8_t *)malloc(6 * (new_car_mac));
             if (car_macs == NULL) {
                 ESP_LOGE(TAG, "Failed to allocate car_macs array");
                 return ESP_ERR_NO_MEM;
             }
-            memcpy(car_macs, (uint8_t *)peer_macs[1], 6 * (peer_count-1)); //Skip the Lap Timer MAC
+            memcpy(car_macs, (uint8_t *)peer_macs[lt_peer_count], 6 * new_car_mac); //Next 'new_car_mac' MACS are for the Cars
 
-            for (uint8_t i = 0; i < peer_count-1; i++) {
+            for (uint8_t i = 0; i < new_car_mac; i++) {
                 uint8_t *car_mac = car_macs + (i * 6);
                 ESP_LOGI(TAG, "Adding peer %d: " MACSTR, i, MAC2STR(car_mac));
                 ESP_ERROR_CHECK(espnow_add_peer(car_mac, config->channel, false));

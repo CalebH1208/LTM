@@ -23,6 +23,7 @@ void app_main(void){
     valid_CAN_speeds_t CAN_speed;
     car_state_t car_state;
     paddock_array_t paddock_array;
+    lt_array_t lt_array;
     int global_time;
     CAN_metadata_t can_metadata;
     uint32_t* LoRa_array;
@@ -47,6 +48,7 @@ void app_main(void){
     initialization_parameters.bus_speed = &CAN_speed;
     initialization_parameters.car_state = &car_state;
     initialization_parameters.paddock_array = &paddock_array;
+    initialization_parameters.lt_array = &lt_array;
     initialization_parameters.global_time_id = &global_time;
     initialization_parameters.can_data = &can_metadata;
     initialization_parameters.LoRa_array = &LoRa_array;
@@ -110,7 +112,7 @@ void app_main(void){
         ESP_LOGI(TAG,"THIS IS THE PADDOCK SIDE ESP");
         ESP_ERROR_CHECK(serial_service_init(&paddock_array));
         ESP_ERROR_CHECK(espnow_init(&espnow_config, 0, LTM_type,
-                                    espnow_peer_macs, espnow_peer_count));
+                                    espnow_peer_macs, espnow_peer_count, paddock_array.num_cars, lt_array));
         ESP_LOGI(TAG, "inits ran");
 
         xTaskCreate(espnow_paddock_ritual, "ESP-NOW Ritual", 16384, NULL, 2, NULL);

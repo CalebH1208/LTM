@@ -28,6 +28,7 @@ typedef struct {
     valid_CAN_speeds_t* bus_speed;
     car_state_t* car_state;
     paddock_array_t* paddock_array;
+    lt_array_t* lt_array;
     int* global_time_id;
     CAN_metadata_t* can_data;
     uint32_t** LoRa_array;

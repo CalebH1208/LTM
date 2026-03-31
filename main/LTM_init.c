@@ -85,6 +85,7 @@ esp_err_t parse_JSON_globals(init_parameters params){
 
 esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     paddock_array_t* paddock_array = params.paddock_array;
+    lt_array_t* lt_array = params.lt_array;
     uint8_t* espnow_channel = params.espnow_channel;
     uint8_t (*espnow_peer_macs)[6] = params.espnow_peer_macs;
     uint8_t* espnow_peer_count = params.espnow_peer_count;
@@ -107,20 +108,38 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
 
     uint8_t peer_index = 0;
 
-    // Parse Lap Timer 
-    cJSON* lt = cJSON_GetObjectItemCaseSensitive(root, "LT_MAC");
-    if(lt != NULL && cJSON_IsString(lt) && peer_index < 20) {
-        sscanf(lt->valuestring, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
-                   &espnow_peer_macs[peer_index][0], &espnow_peer_macs[peer_index][1],
-                   &espnow_peer_macs[peer_index][2], &espnow_peer_macs[peer_index][3],
-                   &espnow_peer_macs[peer_index][4], &espnow_peer_macs[peer_index][5]);
-        peer_index++;
-        ESP_LOGI(TAG, "PADDOCK mode: Lap Timer MAC = %02X:%02X:%02X:%02X:%02X:%02X",
-                    espnow_peer_macs[peer_index-1][0], espnow_peer_macs[peer_index-1][1],
-                    espnow_peer_macs[peer_index-1][2], espnow_peer_macs[peer_index-1][3],
-                    espnow_peer_macs[peer_index-1][4], espnow_peer_macs[peer_index-1][5]);
-    }
+    // Parse Lap Timer data
+    cJSON* JSON_lt_array = cJSON_GetObjectItemCaseSensitive(root,"LT");
+    uint32_t lt_array_len = cJSON_GetArraySize(JSON_lt_array);
+    lt_state_t *lt_state_array = malloc(sizeof(lt_state_t) * lt_array_len);
+    if(NULL == lt_state_array) return ESP_ERR_NO_MEM;
+
+    cJSON* lt_iterable;
+    int index = 0;
+    cJSON_ArrayForEach(lt_iterable,JSON_lt_array){
+        cJSON* label = cJSON_GetObjectItemCaseSensitive(lt_iterable,"L");
+        lt_state_array[index].label = label->valueint;
+        cJSON* position = cJSON_GetObjectItemCaseSensitive(lt_iterable,"P");
+        lt_state_array[index].position = position->valueint;
     
+        cJSON* lt_mac = cJSON_GetObjectItemCaseSensitive(lt_iterable, "LT_MAC");
+        if(lt_mac != NULL && cJSON_IsString(lt_mac) && peer_index < 20) {
+            sscanf(lt_mac->valuestring, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+                    &espnow_peer_macs[peer_index][0], &espnow_peer_macs[peer_index][1],
+                    &espnow_peer_macs[peer_index][2], &espnow_peer_macs[peer_index][3],
+                    &espnow_peer_macs[peer_index][4], &espnow_peer_macs[peer_index][5]);
+            memcpy(lt_state_array[index].mac, espnow_peer_macs[peer_index], 6);
+            peer_index++;
+            ESP_LOGI(TAG, "PADDOCK mode: Lap Timer MAC = %02X:%02X:%02X:%02X:%02X:%02X",
+                        espnow_peer_macs[peer_index-1][0], espnow_peer_macs[peer_index-1][1],
+                        espnow_peer_macs[peer_index-1][2], espnow_peer_macs[peer_index-1][3],
+                        espnow_peer_macs[peer_index-1][4], espnow_peer_macs[peer_index-1][5]);
+        }
+    }
+    lt_array->lts = lt_state_array;
+    lt_array->num_lts = lt_array_len;
+
+
     // Parse Car data
     cJSON* JSON_paddock_array = cJSON_GetObjectItemCaseSensitive(root,"CARS");
     uint32_t array_len = cJSON_GetArraySize(JSON_paddock_array);
@@ -181,8 +200,8 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     paddock_array->num_cars = array_len;
     *espnow_peer_count = peer_index;  // Set total number of car peers
 
-    ESP_LOGI(TAG, "ESP-NOW config: Channel=%d, LongRange=%d, Cars=%d",
-             *espnow_channel, *espnow_long_range, *espnow_peer_count);
+    ESP_LOGI(TAG, "ESP-NOW config: Channel=%d, LongRange=%d, Peers=%d, Cars=%d, Lap Timers=%d",
+             *espnow_channel, *espnow_long_range, *espnow_peer_count, paddock_array->num_cars, lt_array->num_lts);
 
     return ESP_OK;
 }

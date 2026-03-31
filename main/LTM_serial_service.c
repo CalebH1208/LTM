@@ -49,7 +49,8 @@ esp_err_t serial_send(uint8_t* data, uint16_t length, uint32_t timestamp_ms){
         }
         if(data_array[0] == -1){
             uint8_t* data = (uint8_t*) data_array;
-            snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d:%d.%d\n|",data[5],data[6],data[7], (data[8] << 8) | data[9]);
+                                                                            //LT:=[segment number],[minutes]:[seconds].[milliseconds]
+            snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d:%d.%d\n|",data[12], data[8],data[9], (data[10] << 8) | data[11]);
             printf("%s",serial_buffer);
         }
 

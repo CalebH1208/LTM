@@ -10,5 +10,5 @@
         "ltm_data_service.h": "c"
     },
     "idf.flashType": "UART",
-    "idf.currentSetup": "c:\\Espressif\\frameworks\\esp-idf-v5.4"
+    "idf.currentSetup": "C:\\Users\\js476\\esp\\v5.5.1\\esp-idf"
 }

@@ -135,6 +135,7 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
                         espnow_peer_macs[peer_index-1][2], espnow_peer_macs[peer_index-1][3],
                         espnow_peer_macs[peer_index-1][4], espnow_peer_macs[peer_index-1][5]);
         }
+        index++;
     }
     lt_array->lts = lt_state_array;
     lt_array->num_lts = lt_array_len;
@@ -147,7 +148,7 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     if(NULL == paddock_state_array) return ESP_ERR_NO_MEM;
 
     cJSON* car_iterable;
-    int index = 0;
+    index = 0;
     cJSON_ArrayForEach(car_iterable,JSON_paddock_array){
         cJSON* cJSON_car_num = cJSON_GetObjectItemCaseSensitive(car_iterable,"CN");
         paddock_state_array[index].car_number = cJSON_car_num->valueint;

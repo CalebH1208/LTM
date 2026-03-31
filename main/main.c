@@ -94,7 +94,7 @@ void app_main(void){
         ESP_ERROR_CHECK(CAN_init((gpio_num_t)CANTX, (gpio_num_t)CANRX, CAN_speed, CAN_ID_array,global_time));
         ESP_ERROR_CHECK(data_logging_init(can_metadata));
         ESP_ERROR_CHECK(espnow_init(&espnow_config, car_state.car_number, LTM_type,
-                                    espnow_peer_macs, espnow_peer_count));
+                    espnow_peer_macs, espnow_peer_count, paddock_array.num_cars, lt_array));
 
         // Initialize send buffer: packet = [car_num (uint32)] + [N data values (uint32 each)] + [marker (uint32)]
         uint32_t espnow_packet_data_len = sizeof(uint32_t) * (LoRa_array_len + 2);
@@ -111,8 +111,8 @@ void app_main(void){
     else{
         ESP_LOGI(TAG,"THIS IS THE PADDOCK SIDE ESP");
         ESP_ERROR_CHECK(serial_service_init(&paddock_array));
-        ESP_ERROR_CHECK(espnow_init(&espnow_config, 0, LTM_type,
-                                    espnow_peer_macs, espnow_peer_count, paddock_array.num_cars, lt_array));
+        ESP_ERROR_CHECK(espnow_init(&espnow_config, 0, LTM_type, 
+                    espnow_peer_macs, espnow_peer_count, paddock_array.num_cars, lt_array));
         ESP_LOGI(TAG, "inits ran");
 
         xTaskCreate(espnow_paddock_ritual, "ESP-NOW Ritual", 16384, NULL, 2, NULL);

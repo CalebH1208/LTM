@@ -2,6 +2,7 @@
 #include "LEDs.h"
 #include "esp_wifi.h"
 #include "esp_now.h"
+// #include "esp_wifi_types.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_task_wdt.h"
@@ -50,7 +51,7 @@ static volatile bool      s_paddock_marker_pending = false;
 static uint8_t            s_paddock_marker_mac[6]  = {0};
 
 // Forward declarations for callbacks
-static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status);
+static void espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status);
 static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len);
 
 void espnow_paddock_queue_marker(const uint8_t *dest_mac) {
@@ -242,8 +243,8 @@ static uint32_t send_cb_fail_count = 0;
  * @brief Send callback - called when ESP-NOW transmission completes
  * Note: This is called AFTER esp_now_send() returns, indicates ACK status
  */
-static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    if (status == ESP_NOW_SEND_SUCCESS) {
+static void espnow_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
+    if (tx_info->tx_status == WIFI_SEND_SUCCESS) {
         send_cb_success_count++;
         s_last_ack_ok = true;
         if (activity_led != GPIO_NUM_NC) {
@@ -379,14 +380,14 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
  * @brief Initialize ESP-NOW wireless communication
  */
 int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
-                uint8_t peer_macs[][6], uint8_t peer_count, uint8_t car_peer_count, lt_array_t* LT_array) {
-    lt_states = LT_array->lts; // Store pointer to LT States for later use in receive callback
-    uint8_t lt_peer_count = LT_array->num_lts;
+                uint8_t peer_macs[][6], uint8_t peer_count, uint8_t car_peer_count, lt_array_t LT_array) {
+    lt_states = LT_array.lts; // Store pointer to LT States for later use in receive callback
+    uint8_t lt_peer_count = LT_array.num_lts;
     if(peer_count > 20) {
         ESP_LOGW(TAG, "peer_count %d exceeds max 20, truncating to 20", peer_count);
         peer_count = 20;
     }
-    if(peer_count > (lt_peer_count car_peer_count)) {
+    if(peer_count > (lt_peer_count + car_peer_count)) {
         ESP_LOGW(TAG, "peer_count: '%d' is greater than lt_peer_count: '%d' + car_peer_count: '%d', so some peers may be ignored",
                  peer_count, lt_peer_count, car_peer_count);
     }
@@ -432,7 +433,7 @@ int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
 
     // Step 5: Register callbacks
     ESP_LOGI(TAG, "Registering ESP-NOW callbacks");
-    ESP_ERROR_CHECK(esp_now_register_send_cb(espnow_send_cb));
+    ESP_ERROR_CHECK(esp_now_register_send_cb(espnow_send_cb)); 
     ESP_ERROR_CHECK(esp_now_register_recv_cb(espnow_recv_cb));
 
     // Step 5: Add peers
@@ -488,7 +489,7 @@ int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
              * 
              * The case with more peers than lt_peer_count and car_peer_count is handled automatically by how the code works
              */
-            new_car_mac = peer_count - lt_peer_count; 
+            uint8_t new_car_mac = peer_count - lt_peer_count; 
             car_mac_count = new_car_mac;
 
             car_macs = (uint8_t *)malloc(6 * (new_car_mac));

@@ -321,6 +321,7 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
         // PADDOCK mode: Queue telemetry for serial output (non-blocking)
         // Never call serial_send() from callback - it blocks the WiFi task!
         rx_packet_count++;
+        static uint8_t lap = 1; // Track current lap for Lap Timer packets (car_num == -1), set to -1 so it becomoes 0 when main is first passed
 
         // Check if all data values are zeros (skip timestamp(4) and car_number(4) = first 8 bytes)
         if (len > 8) {
@@ -358,11 +359,15 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
                     if(memcmp(recv_info->src_addr, lt_states[i].mac, 6) == 0) {
                         //This packet is from a Lap Timer, so we need to find what segment it is
                         uint8_t pos = lt_states[i].position;
+                        if(pos == 0) {
+                            lap++
+                        }
                         memcpy(rx_pkt.data + len - sizeof(uint32_t), &pos, sizeof(uint8_t)); //Copy the segment position to the end of the rx_pkt.data
+                        memcpy(rx_pkt.data + len - sizeof(uint32_t) + sizeof(uint8_t), &lap, sizeof(uint8_t)); //Overwrite the car_num with the lap number
                         break;
                     }
                 }
-                rx_pkt.length = (uint16_t)(len - sizeof(uint32_t) + sizeof(uint8_t)); // Adjust length to account for stripped timestamp and added POS
+                rx_pkt.length = (uint16_t)(len - sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint8_t)); // Adjust length to account for stripped timestamp and added POS
             }
 
             if (xQueueSendFromISR(rx_queue, &rx_pkt, NULL) != pdTRUE) {

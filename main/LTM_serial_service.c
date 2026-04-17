@@ -49,8 +49,9 @@ esp_err_t serial_send(uint8_t* data, uint16_t length, uint32_t timestamp_ms){
         }
         if(data_array[0] == -1){
             uint8_t* data = (uint8_t*) data_array;
-                                                                            //LT:=[segment number],[lap number],[minutes]:[seconds].[milliseconds]
-            snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d,%d:%d.%d\n|",data[12], data[13], data[4],data[5], (data[6] << 8) | data[7]);
+            //data : [car_num][minutes]:[seconds].[milliseconds][segment][lap]
+            //LT:=[segment number],[lap number],[minutes]:[seconds].[milliseconds]
+            snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d,%d:%d.%d\n|",data[8], data[9], data[4],data[5], (data[6] << 8) | data[7]);
             printf("%s",serial_buffer);
         }
 

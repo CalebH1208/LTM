@@ -93,7 +93,6 @@ typedef struct{
 }paddock_array_t;
 
 typedef struct {
-    int32_t label;
     int32_t position;
     uint8_t mac[6];
 }lt_state_t;

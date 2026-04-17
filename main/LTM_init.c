@@ -117,8 +117,6 @@ esp_err_t parse_JSON_globals_paddock(init_parameters params, cJSON* root){
     cJSON* lt_iterable;
     int index = 0;
     cJSON_ArrayForEach(lt_iterable,JSON_lt_array){
-        cJSON* label = cJSON_GetObjectItemCaseSensitive(lt_iterable,"L");
-        lt_state_array[index].label = label->valueint;
         cJSON* position = cJSON_GetObjectItemCaseSensitive(lt_iterable,"P");
         lt_state_array[index].position = position->valueint;
     

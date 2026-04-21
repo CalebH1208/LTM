@@ -37,6 +37,9 @@ void seg_triggered(laptimer_t* laptimer) {
     laptimer->minutes = minutes;
     laptimer->seconds = seconds;
 
+    previous_time.tv_sec = current_time.tv_sec;
+    previous_time.tv_usec = current_time.tv_usec;
+
     ESP_LOGW ("Updated lap time", "Time: %d:%02d.%06llu",
         (minutes), (seconds), (uint64_t) laptimer->microSeconds);
 }

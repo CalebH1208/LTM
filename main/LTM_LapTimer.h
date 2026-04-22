@@ -20,7 +20,7 @@ typedef struct timeval lt_timeval;
 
 esp_err_t lap_timer_init();
 
-void seg_triggered(laptimer_t* laptimer);
+int seg_triggered(laptimer_t* laptimer);
 
 esp_err_t compose_LT_data(uint8_t* data);
 

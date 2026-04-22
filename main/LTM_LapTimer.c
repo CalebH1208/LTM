@@ -10,7 +10,7 @@ esp_err_t lap_timer_init() {
     return ESP_OK;
 }
 
-void seg_triggered(laptimer_t* laptimer) { 
+int seg_triggered(laptimer_t* laptimer) { 
     lt_timeval current_time;
     gettimeofday(&current_time, NULL);
     
@@ -25,7 +25,7 @@ void seg_triggered(laptimer_t* laptimer) {
     if (totalMicroseconds < VALID_SEGMENT_TRIGGER_US) { //Check if trigger is valid
         ESP_LOGW ("Lap too short, ignoring", "Time: %d:%02d.%06llu",
             (totalMicroseconds / 60000000), ((totalMicroseconds % 60000000) / 1000000), (totalMicroseconds % 1000000));
-        return;
+        return 1;
     }
 
     //Get minutes and seconds from totalMicroseconds
@@ -40,15 +40,20 @@ void seg_triggered(laptimer_t* laptimer) {
     previous_time.tv_sec = current_time.tv_sec;
     previous_time.tv_usec = current_time.tv_usec;
 
-    ESP_LOGW ("Updated lap time", "Time: %d:%02d.%06llu",
-        (minutes), (seconds), (uint64_t) laptimer->microSeconds);
+    // ESP_LOGW ("Updated lap time", "Time: %d:%02d.%06llu",
+    //     (minutes), (seconds), (uint64_t) laptimer->microSeconds);
+
+    return 0;
 }
 
 esp_err_t compose_LT_data(uint8_t* data) {
     if(data == NULL) return ESP_ERR_INVALID_ARG;
 
-    laptimer_t laptimer;
-    seg_triggered(&laptimer);
+    laptimer_t laptimer = {0};
+    if(seg_triggered(&laptimer)) {
+        //Lap time was too short, do not update data
+        return ESP_FAIL;
+    }
 
     // "LT": <index>, <min>:<sec>::<ms>
 

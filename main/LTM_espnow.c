@@ -355,10 +355,6 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
                 memcpy(rx_pkt.data, data + sizeof(uint32_t), 4);
 
                 int pos = -1;
-                ESP_LOGW(TAG, "Received Lap Timer packet, looking for matching MAC among %d LT peers", lt_mac_count);
-                ESP_LOGW(TAG, "Received from MAC: %02X:%02X:%02X:%02X:%02X:%02X",
-                         recv_info->src_addr[0], recv_info->src_addr[1], recv_info->src_addr[2],
-                         recv_info->src_addr[3], recv_info->src_addr[4], recv_info->src_addr[5]);
 
                 for(int i = 0; i < lt_mac_count; i++) {
                     if(memcmp(recv_info->src_addr, lt_states[i].mac, 6) == 0) pos = i;
@@ -369,17 +365,16 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
                     ESP_LOGE(TAG, "No matching LT MAC found for received packet!");
                     return; // Drop packet if no matching LT found
                 }
-                if(pos == 0) lap++;
-                // vTaskDelay(pdMS_TO_TICKS(1000)); //Small delay to ensure lap time is fully received before processing next packet
-                compose_LT_data(data);
-                // lt_times[pos].minutes = data[0];
-                // lt_times[pos].seconds = data[1];
-                // lt_times[pos].microSeconds = (data[2] << 8) | data[3];
-
+                // if(pos == 0) lap++;
+                
+                if(compose_LT_data(data) != ESP_OK) {
+                    return; // Drop packet if LT data composition fails (e.g. invalid segment time)
+                } 
+                lap++;
                 memcpy(rx_pkt.data + 4, data, 4);
                 memcpy(rx_pkt.data + 8, &pos, sizeof(uint8_t)); //Copy the segment position after the segment_time data
                 memcpy(rx_pkt.data + 9, &lap, sizeof(uint8_t)); //Add the lap number
-                
+            
                 rx_pkt.length = (uint16_t)(10); 
             } else {
                 // Strip the leading 4-byte timestamp; remainder is the original [car_num][data...] packet

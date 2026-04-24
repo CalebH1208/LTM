@@ -21,10 +21,14 @@ int seg_triggered(laptimer_t* laptimer) {
     //Total time elapsed in microseconds (Us)
     uint64_t totalMicroseconds = currentTimeUs - previousTimeUs;
 
-    // DEBUG: printf("%lld\n", (uint64_t) totalMicroseconds);
     if (totalMicroseconds < VALID_SEGMENT_TRIGGER_US) { //Check if trigger is valid
-        ESP_LOGW ("Lap too short, ignoring", "Time: %d:%02d.%06llu",
-            (totalMicroseconds / 60000000), ((totalMicroseconds % 60000000) / 1000000), (totalMicroseconds % 1000000));
+        // ESP_LOGW("Lap too short, ignoring", "Time: %d:%02d.%06" PRIu64,
+        //     (int)(totalMicroseconds / 60000000),
+        //     (int)((totalMicroseconds % 60000000) / 1000000),
+        //     (uint64_t)(totalMicroseconds % 1000000));
+        previous_time.tv_sec = current_time.tv_sec;
+        previous_time.tv_usec = current_time.tv_usec;
+
         return 1;
     }
 
@@ -33,15 +37,15 @@ int seg_triggered(laptimer_t* laptimer) {
     uint8_t seconds = (totalMicroseconds % 60000000) / 1000000;
 
     //Update the timer
-    laptimer->microSeconds = totalMicroseconds % 1000000; //Remainder as microseconds
+    laptimer->millisec = (totalMicroseconds % 1000000) / 1000; //Remainder as microseconds
     laptimer->minutes = minutes;
     laptimer->seconds = seconds;
 
     previous_time.tv_sec = current_time.tv_sec;
     previous_time.tv_usec = current_time.tv_usec;
 
-    // ESP_LOGW ("Updated lap time", "Time: %d:%02d.%06llu",
-    //     (minutes), (seconds), (uint64_t) laptimer->microSeconds);
+    // ESP_LOGW ("Updated lap time", "Time: %d:%02d.%03llu",
+    //     (minutes), (seconds), (uint64_t) laptimer->millisec);
 
     return 0;
 }
@@ -58,12 +62,11 @@ esp_err_t compose_LT_data(uint8_t* data) {
     // "LT": <index>, <min>:<sec>::<ms>
 
     //Lap Time Data
-    data[0] = laptimer.minutes % 256;
+    data[0] = laptimer.minutes % 256; //Store minutes in first byte (max 255 minutes) 
     data[1] = laptimer.seconds;
 
-    int milliSec = laptimer.microSeconds/1000;
-    data[2] = milliSec/256;
-    data[3] = milliSec % 256;
+    data[2] = (laptimer.millisec >> 8) & 0xFF;  
+    data[3] = laptimer.millisec & 0xFF;        
     
     return ESP_OK;
 }

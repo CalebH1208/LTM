@@ -360,9 +360,8 @@ static void espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *
                     if(memcmp(recv_info->src_addr, lt_states[i].mac, 6) == 0) pos = i;
                 }
                 
-                ESP_LOGW(TAG, "Lap Timer packet matched to position %d", pos);
                 if(pos == -1) {
-                    ESP_LOGE(TAG, "No matching LT MAC found for received packet!");
+                    // ESP_LOGE(TAG, "No matching LT MAC found for received packet!");
                     return; // Drop packet if no matching LT found
                 }
                 // if(pos == 0) lap++;
@@ -403,7 +402,7 @@ int espnow_init(espnow_config_t* config, uint32_t car_num, LTM_type_t ltm_type,
     lt_states = LT_array.lts; // Store pointer to LT States for later use in receive callback
     uint8_t lt_peer_count = LT_array.num_lts;
     if(peer_count > 20) {
-        ESP_LOGW(TAG, "peer_count %d exceeds max 20, truncating to 20", peer_count);
+        // ESP_LOGW(TAG, "peer_count %d exceeds max 20, truncating to 20", peer_count);
         peer_count = 20;
     }
     // if(peer_count > (lt_peer_count + car_peer_count)) {

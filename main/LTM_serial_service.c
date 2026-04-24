@@ -38,23 +38,36 @@ esp_err_t serial_send(uint8_t* data, uint16_t length, uint32_t timestamp_ms){
 
 
         char serial_buffer[SERIAL_BUFFER_LENGTH];
-        for(int i = 0; i < paddock_array->num_cars; i++){
-            if(data_array[0] == paddock_array->cars[i].car_number){
-                compile_buffer(serial_buffer, paddock_array->cars[i].elements, data_array, paddock_array->cars[i].array_length, paddock_array->cars[i].car_number, timestamp_ms, rx_word_count);
-                // ESP_LOGI(TAG,"Started print");
-                printf("%s", serial_buffer);
-                // ESP_LOGI(TAG,"stopped print");
-                break;
-            }
-        }
+
         if(data_array[0] == -1){
             uint8_t* data = (uint8_t*) data_array;
             //data : [car_num][minutes]:[seconds].[milliseconds][segment][lap]
             //LT:=[segment number],[lap number],[minutes]:[seconds].[milliseconds]
             // snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d,%d:%d.%d\n|",data[8], data[9], data[4],data[5], (data[6] << 8) | data[7]);
-            snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d:%d.%d\n|", data[9], data[4],data[5], (data[6] << 8) | data[7]);
+            // snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%u,%u,%02u:%02u.%06llu" "\n|",data[8], data[9], data[4],data[5], ((uint64_t)((data[6] << 8) | data[7])));
+            snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%u,%02u:%02u.%03llu" "\n|",data[9], data[4],data[5], ((uint64_t)((data[6] << 8) | data[7])));
+            
+            
+            // ESP_LOGW("Lap too short, ignoring", "Time: %d:%02d.%06" PRIu64,
+        //     (int)(totalMicroseconds / 60000000),
+        //     (int)((totalMicroseconds % 60000000) / 1000000),
+        //     (uint64_t)(totalMicroseconds % 1000000));
+
+            // snprintf(serial_buffer , SERIAL_BUFFER_LENGTH , "LT:=%d,%d:%d.%d\n|", data[9], data[4],data[5], (data[6] << 8) | data[7]);
             printf("%s",serial_buffer);
+        } else {
+            for(int i = 0; i < paddock_array->num_cars; i++){
+                if(data_array[0] == paddock_array->cars[i].car_number){
+                    compile_buffer(serial_buffer, paddock_array->cars[i].elements, data_array, paddock_array->cars[i].array_length, paddock_array->cars[i].car_number, timestamp_ms, rx_word_count);
+                    // ESP_LOGI(TAG,"Started print");
+                    printf("%s", serial_buffer);
+                    // ESP_LOGI(TAG,"stopped print");
+                    break;
+                }
+            }  
         }
+
+        
 
         // Yield after printf to allow IDLE task to run and reset watchdog
         // This prevents watchdog timeouts when printf blocks for extended periods
